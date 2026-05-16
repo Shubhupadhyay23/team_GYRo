@@ -8,3 +8,4 @@ test_env/
 test_gmail_diag.py
 scrape_debug.py
 .venv/
+venv/
