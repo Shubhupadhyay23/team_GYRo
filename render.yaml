@@ -13,7 +13,7 @@ services:
         value: 3.11.0
       - key: DATABASE_URL
         sync: false
-      - key: ANTHROPIC_API_KEY
+      - key: GROQ_API_KEY
         sync: false
       - key: SERPER_API_KEY
         sync: false
