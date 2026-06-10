@@ -465,7 +465,6 @@ async def end_session(sid, data):
     result = await mira.end_session(user_id)
     if result:
         await sio.emit("session_recap", result, room=user_id)
-        await sio.emit("session_ended", result, room=user_id)
 
     # Auto-advance queue: mark current active as completed, promote next
     await _auto_advance_queue(user_id)
