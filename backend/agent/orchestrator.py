@@ -46,7 +46,7 @@ SOFT_API_LIMIT = 20
 MAX_TOOL_RESULT_CHARS = 20_000  # ~5k tokens max per tool result in history
 
 # Initialize Anthropic client for recommendation pipeline
-groq_client = AsyncGroq(api_key=os.getenv("GROQ_API_KEY"))
+groq_client = AsyncGroq(api_key=os.environ.get("GROQ_API_KEY", "missing_key"))
 
 
 @dataclass
@@ -78,7 +78,7 @@ class MiraOrchestrator:
     """Event-driven orchestrator for the Mira AI stylist agent."""
 
     def __init__(self, socket_io=None):
-        self.client = AsyncGroq(api_key=os.getenv("GROQ_API_KEY"))
+        self.client = AsyncGroq(api_key=os.environ.get("GROQ_API_KEY", "missing_key"))
         self.sio = socket_io
         self.sessions: dict[str, SessionState] = {}
         self._silence_tasks: dict[str, asyncio.Task] = {}
