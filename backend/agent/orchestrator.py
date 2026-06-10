@@ -78,7 +78,9 @@ class MiraOrchestrator:
     """Event-driven orchestrator for the Mira AI stylist agent."""
 
     def __init__(self, socket_io=None):
-        self.client = AsyncGroq(api_key=os.environ.get("GROQ_API_KEY", "missing_key"))
+        raw_key = os.environ.get("GROQ_API_KEY", "missing_key")
+        clean_key = raw_key.strip().split("\n")[0].strip()
+        self.client = AsyncGroq(api_key=clean_key)
         self.sio = socket_io
         self.sessions: dict[str, SessionState] = {}
         self._silence_tasks: dict[str, asyncio.Task] = {}
