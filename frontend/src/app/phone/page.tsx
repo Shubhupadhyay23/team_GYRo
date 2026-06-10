@@ -13,7 +13,7 @@ import {
   login,
 } from "@/lib/api";
 import type { OnboardingData } from "@/lib/types";
-import GoogleSignIn from "@/components/phone/GoogleSignIn";
+
 import SelfieCapture from "@/components/phone/SelfieCapture";
 import QueueStatus from "@/components/phone/QueueStatus";
 import PhoneInput from "@/components/phone/PhoneInput";
