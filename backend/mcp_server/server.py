@@ -26,7 +26,7 @@ logging.basicConfig(
     datefmt="%H:%M:%S",
 )
 
-DATABASE_URL = os.getenv("DATABASE_URL", "")
+DATABASE_URL = os.getenv("DATABASE_URL", "").strip().strip('"').strip("'")
 
 # ---------------------------------------------------------------------------
 # Connection pool (lazy singleton)

@@ -30,7 +30,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-DATABASE_URL = os.getenv("DATABASE_URL", "")
+DATABASE_URL = os.getenv("DATABASE_URL", "").strip().strip('"').strip("'")
 
 
 def _get_neon_http_url() -> str:
