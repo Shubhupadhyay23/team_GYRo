@@ -45,10 +45,19 @@ export interface QueueInfo {
   total_ahead: number;
 }
 
-export function googleLogin(code: string, redirectUri: string = "postmessage") {
-  return localRequest<UserProfile>("/api/auth/google", {
+export function signup(name: string, email: string, password: string, phone?: string) {
+  const payload: any = { name, email, password };
+  if (phone) payload.phone = phone;
+  return request<UserProfile>("/auth/signup", {
     method: "POST",
-    body: JSON.stringify({ code, redirect_uri: redirectUri }),
+    body: JSON.stringify(payload),
+  });
+}
+
+export function login(email: string, password: string) {
+  return request<UserProfile>("/auth/login", {
+    method: "POST",
+    body: JSON.stringify({ email, password }),
   });
 }
 

@@ -16,6 +16,8 @@ pytest==8.3.4
 pytest-asyncio==0.24.0
 tabulate==0.9.0
 rembg==2.0.69
-onnxruntime==1.21.1
+onnxruntime>=1.24.1
 fastmcp==2.14.5
 phonenumbers==8.13.53
+passlib[bcrypt]>=1.7.4
+groq>=0.5.0

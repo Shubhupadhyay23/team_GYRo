@@ -4,7 +4,7 @@ import os
 import uuid
 from uuid import UUID
 
-from anthropic import AsyncAnthropic
+from groq import AsyncGroq
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from starlette.middleware.cors import CORSMiddleware
@@ -158,12 +158,12 @@ async def test_recommend(body: dict):
     style_notes = body.get("style_notes", "casual")
 
     serper_key = os.getenv("SERPER_API_KEY")
-    anthropic_key = os.getenv("ANTHROPIC_API_KEY")
+    groq_key = os.getenv("GROQ_API_KEY")
 
     if not serper_key:
         raise HTTPException(status_code=500, detail="SERPER_API_KEY not configured")
-    if not anthropic_key:
-        raise HTTPException(status_code=500, detail="ANTHROPIC_API_KEY not configured")
+    if not groq_key:
+        raise HTTPException(status_code=500, detail="GROQ_API_KEY not configured")
 
     # Step 1: Serper search for tops + bottoms
     print(f"[test/recommend] Searching for {brands} ({gender}, {style_notes})")
@@ -222,18 +222,18 @@ Reply ONLY with valid JSON (no markdown):
   ]
 }}"""
 
-    client = AsyncAnthropic(
-        api_key=anthropic_key,
-        default_headers={"anthropic-beta": "oauth-2025-04-20"},
+    client = AsyncGroq(
+        api_key=groq_key,
     )
 
     try:
-        response = await client.messages.create(
-            model="claude-haiku-4-5-20251001",
+        response = await client.chat.completions.create(
+            model="llama-3.1-8b-instant",
             max_tokens=1024,
             messages=[{"role": "user", "content": claude_prompt}],
+            response_format={"type": "json_object"}
         )
-        raw_text = response.content[0].text.strip()
+        raw_text = response.choices[0].message.content.strip()
         # Strip markdown fences if present
         if raw_text.startswith("```"):
             raw_text = raw_text.split("\n", 1)[1].rsplit("```", 1)[0].strip()

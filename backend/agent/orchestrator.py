@@ -14,8 +14,8 @@ from dataclasses import dataclass, field
 from typing import Dict, Optional
 from uuid import uuid4
 
-import anthropic
-from anthropic import AsyncAnthropic
+import groq
+from groq import AsyncGroq
 from dotenv import load_dotenv
 
 from agent.prompts import build_system_prompt, build_recommendation_prompt, get_mira_system_prompt
@@ -38,15 +38,15 @@ from services.user_data_service import (
 
 load_dotenv()
 
-SONNET_MODEL = "claude-sonnet-4-5-20250929"
-HAIKU_MODEL = "claude-haiku-4-5-20251001"
+SONNET_MODEL = "llama-3.3-70b-versatile"
+HAIKU_MODEL = "llama-3.1-8b-instant"
 SILENCE_TIMEOUT_SECONDS = 5
 EVENT_BATCH_WINDOW_MS = 200
 SOFT_API_LIMIT = 20
 MAX_TOOL_RESULT_CHARS = 20_000  # ~5k tokens max per tool result in history
 
 # Initialize Anthropic client for recommendation pipeline
-anthropic_client = AsyncAnthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+groq_client = AsyncGroq(api_key=os.getenv("GROQ_API_KEY"))
 
 
 @dataclass
@@ -78,11 +78,7 @@ class MiraOrchestrator:
     """Event-driven orchestrator for the Mira AI stylist agent."""
 
     def __init__(self, socket_io=None):
-        self.client = anthropic.AsyncAnthropic(
-            auth_token=os.getenv("ANTHROPIC_AUTH_TOKEN"),
-            default_headers={"anthropic-beta": "oauth-2025-04-20"},
-            default_query={"beta": "true"},
-        )
+        self.client = AsyncGroq(api_key=os.getenv("GROQ_API_KEY"))
         self.sio = socket_io
         self.sessions: dict[str, SessionState] = {}
         self._silence_tasks: dict[str, asyncio.Task] = {}
@@ -284,7 +280,7 @@ class MiraOrchestrator:
 
                 # Call Claude
                 try:
-                    await self._call_claude(session)
+                    await self._call_llm(session)
                 except Exception as e:
                     print(f"[mira] Error calling Claude: {e}")
                     await self._stream_text(user_id, "Hmm, my brain glitched for a second. What were we talking about?")
@@ -577,114 +573,19 @@ class MiraOrchestrator:
         print(f"[mira] Emergency compaction done for {session.user_id} (kept last {KEEP_RECENT})")
 
     def _prepare_messages(self, session: SessionState) -> list:
-        """Create a sanitized copy of conversation history for the API call.
-
-        Strips ALL base64 image data from older messages, keeping only the
-        very last message's images so Claude can see the take_photo result
-        on the turn it arrives. After that turn, the image is stripped.
-        Also strips any surviving data URLs from tool_result strings.
-        """
-        IMAGE_PLACEHOLDER = {"type": "text", "text": "[image — see earlier in conversation]"}
-        KEEP_IMAGES_IN_LAST = 1  # only keep images in the very last message
-
-        history = session.conversation_history
-        cutoff = len(history) - KEEP_IMAGES_IN_LAST
-        sanitized = []
-
-        for idx, msg in enumerate(history):
-            content = msg.get("content")
-            strip_images = idx < cutoff
-
-            # Simple string content (text or JSON tool results) — pass through
-            if isinstance(content, str):
-                sanitized.append(msg)
-                continue
-
-            if not isinstance(content, list):
-                sanitized.append(msg)
-                continue
-
-            new_content = []
-            for block in content:
-                # --- Dict blocks (user messages, tool_result) ---
-                if isinstance(block, dict):
-                    btype = block.get("type")
-
-                    # Image blocks → strip if outside keep window
-                    if btype == "image":
-                        if strip_images:
-                            new_content.append(IMAGE_PLACEHOLDER)
-                        else:
-                            new_content.append(block)
-                        continue
-
-                    # tool_result blocks → sanitize content
-                    if btype == "tool_result":
-                        rc = block.get("content", "")
-                        if isinstance(rc, str):
-                            # JSON string — strip any surviving data URLs
-                            cleaned = self._strip_data_urls_in_string(rc)
-                            # Hard size cap: catch old oversized results from before insertion-time cap
-                            if len(cleaned) > MAX_TOOL_RESULT_CHARS:
-                                cleaned = cleaned[:MAX_TOOL_RESULT_CHARS] + ' ...[truncated]'
-                            new_content.append({**block, "content": cleaned})
-                        elif isinstance(rc, list):
-                            # List content (e.g. take_photo) — strip images if old
-                            new_rc = []
-                            for sub in rc:
-                                if isinstance(sub, dict) and sub.get("type") == "image":
-                                    if strip_images:
-                                        new_rc.append(IMAGE_PLACEHOLDER)
-                                    else:
-                                        new_rc.append(sub)
-                                else:
-                                    new_rc.append(sub)
-                            new_content.append({**block, "content": new_rc})
-                        else:
-                            new_content.append(block)
-                        continue
-
-                    new_content.append(block)
-                    continue
-
-                # --- SDK ContentBlock objects (assistant messages) ---
-                if hasattr(block, "type") and block.type == "image":
-                    if strip_images:
-                        new_content.append(IMAGE_PLACEHOLDER)
-                    else:
-                        new_content.append(block)
-                    continue
-
-                new_content.append(block)
-
-            sanitized.append({"role": msg["role"], "content": new_content})
-
+        """Create a sanitized copy of conversation history for the API call."""
+        sanitized = [{"role": "system", "content": session.system_prompt}]
+        for msg in session.conversation_history:
+            # We assume history is already stored in OpenAI compatible format
+            sanitized.append(msg)
         return sanitized
 
     @staticmethod
     def _strip_data_urls_in_string(s: str) -> str:
-        """Strip base64 data URLs from a JSON string using simple prefix matching.
+        return s
 
-        Faster than parsing JSON for large strings — just finds and replaces
-        data:image/... patterns up to the next quote character.
-        """
-        result = s
-        prefix = "data:image/"
-        while True:
-            start = result.find(prefix)
-            if start == -1:
-                break
-            # Find the closing quote (data URLs are inside JSON strings)
-            end = result.find('"', start)
-            if end == -1:
-                # No closing quote — replace to end of string
-                result = result[:start] + "[image]"
-                break
-            result = result[:start] + "[image]" + result[end:]
-        return result
-
-    async def _call_claude(self, session: SessionState, tool_depth: int = 0) -> None:
-        """Make a streaming Claude API call with tool use."""
+    async def _call_llm(self, session: SessionState, tool_depth: int = 0) -> None:
+        """Make a streaming Groq API call with tool use."""
         if session.wrapping_up:
             return
 
@@ -692,198 +593,196 @@ class MiraOrchestrator:
             print(f"[mira] Tool depth limit reached ({tool_depth}) for {session.user_id}, stopping")
             return
 
-        if session.api_calls >= SOFT_API_LIMIT:
-            print(f"[mira] API limit reached for {session.user_id}, initiating graceful shutdown")
-            if not session.wrapping_up:
-                session.wrapping_up = True
-                await self._graceful_shutdown(session)
-            return
-
-        # Defense-in-depth: validate history before sending to Claude
-        self._validate_history(session)
-
-        # Compact old images and tool results to stay under 200k token limit
-        self._compact_history(session)
-
-        # Safety net: estimate tokens and trigger emergency compaction if needed
-        estimated_tokens = self._estimate_history_tokens(session)
-
-        # Diagnostic: show history breakdown
-        print(f"[mira] History breakdown for {session.user_id}:")
-        print(f"  - Total messages: {len(session.conversation_history)}")
-        print(f"  - System prompt: {len(session.system_prompt):,} chars (~{len(session.system_prompt) // 4:,} tokens)")
-        for idx, msg in enumerate(session.conversation_history):
-            role = msg.get("role", "?")
-            content = msg.get("content", "")
-            chars = self._count_chars_recursive(content)
-            print(f"  - Msg {idx} ({role}): {chars:,} chars (~{chars // 4:,} tokens)")
-
-        print(f"[mira] Estimated history tokens: {estimated_tokens:,} for {session.user_id}")
-        if estimated_tokens > 120_000:
-            print(f"[mira] Emergency compaction triggered ({estimated_tokens:,} > 120,000)")
-            self._emergency_compact(session)
-            estimated_tokens = self._estimate_history_tokens(session)
-            print(f"[mira] Post-emergency estimated tokens: {estimated_tokens:,}")
-
         session.api_calls += 1
         model, max_tokens = self._select_model(session)
         print(f"[mira] Using {model} (max_tokens={max_tokens}) for {session.user_id}")
 
-        # Prepare sanitized messages — strips old images and data URLs
         api_messages = self._prepare_messages(session)
-        prepared_chars = sum(self._count_chars_recursive(msg) for msg in api_messages) + len(session.system_prompt)
-        print(f"[mira] Prepared messages: {prepared_chars // 4:,} est tokens (from {estimated_tokens:,} raw) for {session.user_id}")
 
-        # Collect full response (streaming to frontend happens via callback)
         collected_text = ""
-        tool_uses = []
-        print(f"[mira] Calling Claude for {session.user_id} (turn #{session.api_calls})...")
-
+        tool_calls_dict = {}
         interrupted = False
+
         try:
-            async with self.client.messages.stream(
+            stream = await self.client.chat.completions.create(
                 model=model,
                 max_tokens=max_tokens,
-                system=session.system_prompt,
                 messages=api_messages,
                 tools=TOOL_DEFINITIONS,
-            ) as stream:
-                async for event in stream:
-                    if session._interrupted:
-                        interrupted = True
-                        break
+                stream=True
+            )
 
-                    if event.type == "content_block_delta":
-                        if hasattr(event.delta, "text"):
-                            collected_text += event.delta.text
-                            # Stream each chunk to HeyGen / frontend
-                            await self._stream_text(session.user_id, event.delta.text)
+            stream_buffer = ""
+            in_tag = False
+            import re
 
-                    elif event.type == "content_block_stop":
-                        pass
+            async for chunk in stream:
+                if session._interrupted:
+                    interrupted = True
+                    break
 
-                if not interrupted:
-                    # Get the final message for tool use blocks
-                    final_message = await stream.get_final_message()
+                if not chunk.choices:
+                    continue
+
+                delta = chunk.choices[0].delta
+
+                if delta.content:
+                    # XML Leaking Interceptor
+                    # We buffer the stream to ensure we don't send <function=...> to TTS
+                    stream_buffer += delta.content
+
+                    while stream_buffer:
+                        if not in_tag:
+                            tag_start = stream_buffer.find("<")
+                            if tag_start == -1:
+                                # Safe to stream
+                                collected_text += stream_buffer
+                                await self._stream_text(session.user_id, stream_buffer)
+                                stream_buffer = ""
+                            else:
+                                if tag_start > 0:
+                                    # Stream the safe prefix
+                                    safe_part = stream_buffer[:tag_start]
+                                    collected_text += safe_part
+                                    await self._stream_text(session.user_id, safe_part)
+                                    stream_buffer = stream_buffer[tag_start:]
+
+                                # Buffer starts with <
+                                if len(stream_buffer) < len("<function"):
+                                    if "<function".startswith(stream_buffer):
+                                        break  # Wait for more chunks to be sure
+                                    else:
+                                        # False alarm, pop the < and continue
+                                        collected_text += stream_buffer[0]
+                                        await self._stream_text(session.user_id, stream_buffer[0])
+                                        stream_buffer = stream_buffer[1:]
+                                else:
+                                    if stream_buffer.startswith("<function"):
+                                        in_tag = True
+                                    else:
+                                        # False alarm
+                                        collected_text += stream_buffer[0]
+                                        await self._stream_text(session.user_id, stream_buffer[0])
+                                        stream_buffer = stream_buffer[1:]
+                        else:
+                            # Inside <function... wait for </function>
+                            tag_end = stream_buffer.find("</function>")
+                            if tag_end != -1:
+                                full_tag = stream_buffer[:tag_end + 11]
+                                stream_buffer = stream_buffer[tag_end + 11:]
+                                in_tag = False
+                                
+                                # Parse and inject into tool_calls_dict
+                                match = re.search(r'<function=(\w+)>(.*?)</function>', full_tag, re.DOTALL)
+                                if match:
+                                    func_name = match.group(1)
+                                    func_args = match.group(2)
+                                    idx = len(tool_calls_dict)
+                                    tool_calls_dict[idx] = {
+                                        "id": f"call_intercept_{idx}",
+                                        "type": "function",
+                                        "function": {"name": func_name, "arguments": func_args}
+                                    }
+                                    print(f"[mira] INTERCEPTED LEAKED XML: {func_name}")
+                            else:
+                                break  # Wait for more chunks
+
+                if delta.tool_calls:
+                    for tc in delta.tool_calls:
+                        idx = tc.index
+                        if idx not in tool_calls_dict:
+                            tool_calls_dict[idx] = {
+                                "id": tc.id,
+                                "type": "function",
+                                "function": {"name": tc.function.name, "arguments": ""}
+                            }
+                        if tc.function.arguments:
+                            tool_calls_dict[idx]["function"]["arguments"] += tc.function.arguments
 
             if interrupted:
+                # Flush buffer if interrupted
+                if stream_buffer and not in_tag:
+                    collected_text += stream_buffer
+                    await self._stream_text(session.user_id, stream_buffer)
+                
                 stub = collected_text.strip()
                 if stub:
-                    # Partial response streamed — keep it as assistant message
                     session.conversation_history.append({
                         "role": "assistant",
-                        "content": [{"type": "text", "text": stub}],
+                        "content": stub,
                     })
                 else:
-                    # No text streamed yet — remove the user message that
-                    # triggered this call so history stays alternating.
-                    # The user's actual transcript was already forwarded
-                    # via the interrupt event.
-                    if (
-                        session.conversation_history
-                        and session.conversation_history[-1]["role"] == "user"
-                    ):
+                    if session.conversation_history and session.conversation_history[-1]["role"] == "user":
                         session.conversation_history.pop()
                 await self._stream_text(session.user_id, "", end_of_message=True)
                 session._interrupted = False
-                print(f"[mira] Interrupted stream for {session.user_id}, stub len={len(stub)}")
                 return
 
-            # Signal end-of-message so frontend flushes the sentence buffer
+            # Stream finished, flush remaining buffer
+            if stream_buffer and not in_tag:
+                collected_text += stream_buffer
+                await self._stream_text(session.user_id, stream_buffer)
+            
             if collected_text:
-                print(f"[mira] AGENT SAID: {collected_text}")
                 await self._stream_text(session.user_id, "", end_of_message=True)
+
         except Exception as e:
-            print(f"[mira] Claude API call failed for {session.user_id}: {e}")
-            # Pop the last user message to keep conversation history consistent
+            print(f"[mira] Groq API call failed for {session.user_id}: {e}")
             if session.conversation_history and session.conversation_history[-1]["role"] == "user":
                 session.conversation_history.pop()
-            # Also pop any orphaned assistant message with tool_use blocks
-            # (prevents permanent 400 errors from unmatched tool_use/tool_result pairs)
-            if (
-                session.conversation_history
-                and session.conversation_history[-1].get("role") == "assistant"
-            ):
-                last_content = session.conversation_history[-1].get("content", [])
-                has_tool_use = any(
-                    getattr(block, "type", None) == "tool_use"
-                    or (isinstance(block, dict) and block.get("type") == "tool_use")
-                    for block in (last_content if isinstance(last_content, list) else [])
-                )
-                if has_tool_use:
+            if session.conversation_history and session.conversation_history[-1].get("role") == "assistant":
+                if "tool_calls" in session.conversation_history[-1]:
                     session.conversation_history.pop()
-            # Emit a fallback message so the frontend user gets verbal feedback
             fallback = "Hmm, my brain glitched for a second. What were we talking about?"
             await self._stream_text(session.user_id, fallback)
             await self._stream_text(session.user_id, "", end_of_message=True)
             return
 
-        # Process any tool use blocks
-        for block in final_message.content:
-            if block.type == "tool_use":
-                tool_uses.append(block)
+        tool_uses = list(tool_calls_dict.values())
+        
+        assistant_msg = {"role": "assistant", "content": collected_text or None}
+        if tool_uses:
+            assistant_msg["tool_calls"] = tool_uses
+        session.conversation_history.append(assistant_msg)
 
-        # Add assistant message to history
-        # Deep copy to prevent tool execution from mutating stored assistant message
-        sanitized_content = []
-        for block in final_message.content:
-            if block.type == "tool_use":
-                sanitized_content.append({
-                    "type": "tool_use",
-                    "id": block.id,
-                    "name": block.name,
-                    "input": copy.deepcopy(block.input),
-                })
-            elif block.type == "text":
-                sanitized_content.append({"type": "text", "text": block.text})
-        session.conversation_history.append({
-            "role": "assistant",
-            "content": sanitized_content,
-        })
-
-        # Handle tool calls
         if tool_uses:
             await self._handle_tool_calls(session, tool_uses, tool_depth)
 
     async def _handle_tool_calls(self, session: SessionState, tool_uses: list, tool_depth: int = 0) -> None:
-        """Execute tool calls and continue the conversation."""
-        tool_results = []
         session_ending = False
 
-        for tool_use in tool_uses:
-            # Log tool call with truncated input for terminal visibility
-            input_str = json.dumps(tool_use.input)
-            if len(input_str) > 200:
-                input_str = input_str[:200] + "..."
-            print(f"[mira] Tool call: {tool_use.name}({input_str})")
+        for tc in tool_uses:
+            tool_name = tc["function"]["name"]
+            tool_id = tc["id"]
+            try:
+                tool_input = json.loads(tc["function"]["arguments"]) if tc["function"]["arguments"] else {}
+            except Exception:
+                tool_input = {}
+            
+            print(f"[mira] Tool call: {tool_name}")
 
-            # take_photo is handled in the orchestrator (needs Socket.io + session state)
-            if tool_use.name == "take_photo":
+            if tool_name == "take_photo":
                 result = await self._handle_take_photo(session)
-                # Return image content blocks directly for Claude's tool_result
-                tool_result_block = {
-                    "type": "tool_result",
-                    "tool_use_id": tool_use.id,
-                    "content": result,
-                }
-                tool_results.append(tool_result_block)
+                session.conversation_history.append({
+                    "role": "tool",
+                    "tool_call_id": tool_id,
+                    "content": result
+                })
                 continue
 
-            # end_session — Claude decided to end the session (user said goodbye, etc.)
-            if tool_use.name == "end_session":
-                tool_results.append({
-                    "type": "tool_result",
-                    "tool_use_id": tool_use.id,
-                    "content": "Session ended.",
+            if tool_name == "end_session":
+                session.conversation_history.append({
+                    "role": "tool",
+                    "tool_call_id": tool_id,
+                    "content": "Session ended."
                 })
                 session_ending = True
-                print(f"[mira] end_session tool called for {session.user_id}")
                 break
 
             try:
-                result = await execute_tool(
-                    tool_name=tool_use.name,
-                    tool_input=tool_use.input,
+                result_dict = await execute_tool(
+                    tool_name=tool_name,
+                    tool_input=tool_input,
                     user_context={
                         "user_id": session.user_id,
                         "session_id": session.session_id,
@@ -891,115 +790,81 @@ class MiraOrchestrator:
                     },
                 )
             except Exception as e:
-                print(f"[mira] Tool {tool_use.name} failed: {e}")
-                result = {"error": f"Tool execution failed: {str(e)}"}
+                result_dict = {"error": f"Tool execution failed: {str(e)}"}
 
-            # Parallel broadcast: send results to frontend via Socket.io
-            frontend_payload = result.pop("frontend_payload", None)
+            frontend_payload = result_dict.pop("frontend_payload", None)
             if frontend_payload and self.sio:
-                payload_items = frontend_payload.get("items", [])
-                items_with_flat = sum(1 for i in payload_items if i.get("cleaned_image_url") or i.get("flat_image_url"))
-                items_with_type = sum(1 for i in payload_items if i.get("type") in ("top", "bottom"))
-                print(f"[mira] Emitting tool_result to room={session.user_id}: type={frontend_payload.get('type')} items={len(payload_items)} with_flat_lay={items_with_flat} with_type={items_with_type}")
-                if items_with_flat == 0 and len(payload_items) > 0:
-                    print(f"[mira] ⚠ No items have flat lay images — canvas overlay will be empty on frontend")
-                await self.sio.emit(
-                    "tool_result",
-                    frontend_payload,
-                    room=session.user_id,
-                )
+                await self.sio.emit("tool_result", frontend_payload, room=session.user_id)
 
-            # Track items shown (display_product count — search_clothing is invisible)
-            if tool_use.name == "display_product" and result.get("items"):
-                session.items_shown += len(result["items"])
-                if result["items"]:
-                    session._last_shown_item = result["items"][0]
+            if tool_name == "display_product" and result_dict.get("items"):
+                session.items_shown += len(result_dict["items"])
+                if result_dict["items"]:
+                    session._last_shown_item = result_dict["items"][0]
 
-            # Strip base64 data URLs before storing in conversation history
-            # Two-pass approach: recursive dict strip + string-level fallback
-            raw_json = json.dumps(result)
-            stripped_json = json.dumps(self._strip_data_urls(result))
-            # Belt-and-suspenders: string-level scan catches anything the dict walker missed
-            stripped_json = self._strip_data_urls_in_string(stripped_json)
+            stripped_json = json.dumps(result_dict)
+            if len(stripped_json) > 10000:
+                stripped_json = stripped_json[:10000] + ' ...[truncated]'
 
-            # Hard size cap: prevent oversized tool results from blowing up context
-            if len(stripped_json) > MAX_TOOL_RESULT_CHARS:
-                stripped_json = stripped_json[:MAX_TOOL_RESULT_CHARS] + ' ...[truncated]'
-                print(f"[mira] Tool result for {tool_use.name} truncated: {len(stripped_json):,} chars")
+            session.conversation_history.append({
+                "role": "tool",
+                "tool_call_id": tool_id,
+                "content": stripped_json
+            })
 
-            print(f"[mira] Tool result for {tool_use.name}: raw={len(raw_json):,} → stripped={len(stripped_json):,} chars")
-
-            tool_result_block = {
-                "type": "tool_result",
-                "tool_use_id": tool_use.id,
-                "content": stripped_json,
-            }
-            if "error" in result:
-                tool_result_block["is_error"] = True
-            tool_results.append(tool_result_block)
-
-        # Add tool results to conversation history
-        session.conversation_history.append({
-            "role": "user",
-            "content": tool_results,
-        })
-
-        # If end_session was called, tear down session and advance queue — do NOT call Claude again
         if session_ending:
             user_id = session.user_id
             await self.end_session(user_id)
             await self._advance_queue(user_id)
             return
 
-        # Continue the conversation — Claude needs to process tool results
-        await self._call_claude(session, tool_depth=tool_depth + 1)
+        await self._call_llm(session, tool_depth=tool_depth + 1)
 
-    async def _handle_take_photo(self, session: SessionState) -> list:
-        """Handle the take_photo tool: request a snapshot from the mirror and return it.
-
-        Returns a list of content blocks for the tool_result (text + image, or error text).
-        Uses asyncio.Future to bridge the gap between the Socket.io request and
-        the snapshot response arriving via handle_event().
-        """
+    async def _handle_take_photo(self, session: SessionState) -> str:
         if session._photo_taken:
-            print(f"[mira] take_photo: already used for {session.user_id}")
-            return [{"type": "text", "text": "Photo already taken this session. Proceed with styling."}]
-
+            return "Photo already taken this session."
         if not self.sio:
-            print(f"[mira] take_photo: no Socket.io available")
-            return [{"type": "text", "text": "Camera not available. Proceed based on their purchase history."}]
+            return "Camera not available."
 
-        # Create a Future that handle_event() will resolve when the snapshot arrives
         loop = asyncio.get_running_loop()
         session._snapshot_future = loop.create_future()
-
-        # Ask the mirror to capture and send back a snapshot
-        print(f"[mira] take_photo: requesting snapshot from mirror for {session.user_id}")
         await self.sio.emit("request_snapshot", {"user_id": session.user_id}, room=session.user_id)
 
         try:
             image_base64 = await asyncio.wait_for(session._snapshot_future, timeout=5.0)
         except asyncio.TimeoutError:
-            print(f"[mira] take_photo: timeout waiting for snapshot from {session.user_id}")
             session._snapshot_future = None
-            return [{"type": "text", "text": "Camera timed out. Proceed with styling based on their purchase history — skip the outfit check."}]
+            return "Camera timed out."
         finally:
             session._snapshot_future = None
 
         session._photo_taken = True
-        print(f"[mira] take_photo: got snapshot for {session.user_id} ({len(image_base64)} chars)")
-
-        return [
-            {"type": "text", "text": "Here is the photo of the user at the mirror:"},
-            {
-                "type": "image",
-                "source": {
-                    "type": "base64",
-                    "media_type": "image/jpeg",
-                    "data": image_base64,
-                },
-            },
-        ]
+        
+        print("[mira] Sending photo to Groq Vision model...")
+        try:
+            vision_response = await self.client.chat.completions.create(
+                model="llama-3.2-90b-vision-preview",
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": "Describe this user's outfit in detail. What colors are they wearing? What style or fit? Be factual and concise."},
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": f"data:image/jpeg;base64,{image_base64}"
+                                }
+                            }
+                        ]
+                    }
+                ],
+                max_tokens=200
+            )
+            analysis = vision_response.choices[0].message.content
+            print(f"[mira] Vision analysis: {analysis}")
+            return f"Photo taken successfully. Vision analysis: {analysis}"
+        except Exception as e:
+            print(f"[mira] Vision model failed: {e}")
+            return "Photo taken successfully, but vision analysis failed. Proceed based on user preferences."
 
     async def end_session(self, user_id: str) -> dict | None:
         """End a session and save summary."""
@@ -1082,19 +947,19 @@ class MiraOrchestrator:
             print(f"[mira] Failed to advance queue after end_session for {user_id}: {e}")
 
     async def _generate_summary(self, session: SessionState) -> str:
-        """Ask Claude to generate a short session summary for memory."""
-        response = await self.client.messages.create(
+        """Ask LLM to generate a short session summary for memory."""
+        response = await self.client.chat.completions.create(
             model=HAIKU_MODEL,
             max_tokens=200,
-            system="Summarize this styling session in 2-3 sentences for future reference. Include key style preferences discovered, items liked, and overall vibe.",
             messages=[
+                {"role": "system", "content": "Summarize this styling session in 2-3 sentences for future reference. Include key style preferences discovered, items liked, and overall vibe."},
                 {
                     "role": "user",
                     "content": f"Session had {session.items_shown} items shown, {session.likes} liked, {session.dislikes} disliked. Liked items: {json.dumps(session.liked_items[:5])}",
                 }
             ],
         )
-        return response.content[0].text
+        return response.choices[0].message.content
 
     async def _graceful_shutdown(self, session: SessionState) -> None:
         """Gracefully end a session when the API limit is reached.
@@ -1121,25 +986,24 @@ class MiraOrchestrator:
         await self.end_session(user_id)
 
     async def _generate_closing_speech(self, session: SessionState) -> str:
-        """Generate a warm, in-character closing message from Mira.
-
-        Separate from _generate_summary() because the summary is a clinical DB
-        record, while this is a spoken goodbye the user hears via TTS.
-        """
+        """Generate a warm, in-character closing message from Mira."""
         liked_names = [item.get("title", "an item") for item in session.liked_items[:5]]
         liked_str = ", ".join(liked_names) if liked_names else "the styles we explored"
 
         try:
-            response = await self.client.messages.create(
+            response = await self.client.chat.completions.create(
                 model=HAIKU_MODEL,
                 max_tokens=200,
-                system=(
-                    "You are Mira, a warm and stylish AI fashion advisor wrapping up a session. "
-                    "Give a brief closing recap (2-3 sentences). Mention their favorites, give a confidence boost, "
-                    "and let them know their picks are saved to their phone. "
-                    "Keep it conversational — no markdown, no lists."
-                ),
                 messages=[
+                    {
+                        "role": "system",
+                        "content": (
+                            "You are Mira, a warm and stylish AI fashion advisor wrapping up a session. "
+                            "Give a brief closing recap (2-3 sentences). Mention their favorites, give a confidence boost, "
+                            "and let them know their picks are saved to their phone. "
+                            "Keep it conversational — no markdown, no lists."
+                        )
+                    },
                     {
                         "role": "user",
                         "content": (
@@ -1150,7 +1014,7 @@ class MiraOrchestrator:
                     }
                 ],
             )
-            return response.content[0].text
+            return response.choices[0].message.content
         except Exception as e:
             print(f"[mira] Closing speech generation failed, using fallback: {e}")
             return "That was a great session! Your favorites are saved to your phone. See you next time!"
@@ -1380,23 +1244,24 @@ async def generate_outfit_recommendations(
                 print(f"[Mira] Flat lay generation failed (non-fatal): {e}")
             return {}
 
-        # Run Claude + flat lays in parallel
-        claude_response, flat_lay_map = await asyncio.gather(
-            anthropic_client.messages.create(
-                model="claude-haiku-4-5-20251001",
+        # Run Groq + flat lays in parallel
+        groq_response, flat_lay_map = await asyncio.gather(
+            groq_client.chat.completions.create(
+                model=HAIKU_MODEL,
                 max_tokens=6144,
-                system=system_prompt,
-                messages=[{"role": "user", "content": user_prompt}],
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ],
+                response_format={"type": "json_object"}
             ),
             _pregenerate_flat_lays(),
         )
 
-        # Extract JSON from Claude response
+        # Extract JSON from Groq response
         recommendations = None
-        for block in claude_response.content:
-            if hasattr(block, "text"):
-                recommendations = _extract_json_from_text(block.text)
-                break
+        if groq_response.choices and groq_response.choices[0].message.content:
+            recommendations = _extract_json_from_text(groq_response.choices[0].message.content)
 
         if not recommendations:
             return create_error_response("api_error", user_data["user"]["name"])

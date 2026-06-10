@@ -39,244 +39,258 @@ POPULAR_BRANDS = [
 # Claude tool definitions for event-driven mirror sessions
 TOOL_DEFINITIONS = [
     {
-        "name": "search_clothing",
-        "description": (
-            "Search for clothing items using Google Shopping. Returns results to YOU only — "
-            "the user does NOT see these results. Use this to gather options, then call "
-            "display_product with your curated picks to overlay them on the user's body. "
-            "Write detailed queries including gender, style keywords, and price ceiling "
-            "when relevant, e.g. 'mens black minimalist sneakers under $150' or "
-            "'women oversized linen blazer summer'."
-        ),
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "query": {
-                    "type": "string",
-                    "description": "Detailed shopping search query with gender, style, and price hints",
-                },
-                "num_results": {
-                    "type": "integer",
-                    "description": "Number of results to return (default 12, max 20)",
-                    "default": 12,
-                },
-            },
-            "required": ["query"],
-        },
-    },
-    {
-        "name": "search_gmail",
-        "description": (
-            "Search the user's Gmail for specific information. Use this when the user mentions "
-            "a specific purchase, brand, or item and you want to look up details. Returns email "
-            "subjects and snippets matching the query. Do NOT use this for general profile building "
-            "— that data is already in your context."
-        ),
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "query": {
-                    "type": "string",
-                    "description": "Gmail search query, e.g. 'from:zara order confirmation' or 'subject:Nike receipt'",
-                },
-                "max_results": {
-                    "type": "integer",
-                    "description": "Max emails to return (default 5)",
-                    "default": 5,
-                },
-            },
-            "required": ["query"],
-        },
-    },
-    {
-        "name": "search_purchases",
-        "description": (
-            "Search the user's full purchase history stored in the database. Use this to look up "
-            "specific purchases by brand, category, price range, or date range. This searches ALL "
-            "purchases ever scraped — not just the ones in your context. Use when the user asks "
-            "about past purchases, a specific brand, or when you want to reference items from "
-            "their historical purchases."
-        ),
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "query": {
-                    "type": "string",
-                    "description": "Free-text search against brand and item name, e.g. 'leather jacket' or 'running shoes'",
-                },
-                "brand": {
-                    "type": "string",
-                    "description": "Exact brand filter, e.g. 'Nike' or 'Zara'",
-                },
-                "category": {
-                    "type": "string",
-                    "description": "Exact category filter, e.g. 'shoes' or 'tops'",
-                },
-                "min_price": {
-                    "type": "number",
-                    "description": "Minimum price filter",
-                },
-                "max_price": {
-                    "type": "number",
-                    "description": "Maximum price filter",
-                },
-                "date_from": {
-                    "type": "string",
-                    "description": "Start date filter (YYYY-MM-DD format)",
-                },
-                "date_to": {
-                    "type": "string",
-                    "description": "End date filter (YYYY-MM-DD format)",
-                },
-                "limit": {
-                    "type": "integer",
-                    "description": "Max results to return (default 20, max 50)",
-                    "default": 20,
-                },
-                "fashion_only": {
-                    "type": "boolean",
-                    "description": "If true, only return fashion items. Default: false (return all).",
-                },
-            },
-            "required": [],
-        },
-    },
-    {
-        "name": "search_calendar",
-        "description": (
-            "Search the user's calendar events by keyword, date range, or location. Use this "
-            "to find upcoming or recent events to tie outfit recommendations to. Events include "
-            "title, time, location, and attendee count. Cancelled events are excluded."
-        ),
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "query": {
-                    "type": "string",
-                    "description": "Free-text search against event title and location, e.g. 'dinner' or 'conference'",
-                },
-                "date_from": {
-                    "type": "string",
-                    "description": "Start date filter (YYYY-MM-DD format)",
-                },
-                "date_to": {
-                    "type": "string",
-                    "description": "End date filter (YYYY-MM-DD format)",
-                },
-                "limit": {
-                    "type": "integer",
-                    "description": "Max results to return (default 20, max 50)",
-                    "default": 20,
-                },
-            },
-            "required": [],
-        },
-    },
-    {
-        "name": "display_product",
-        "description": (
-            "PREFERRED tool for showing clothing on the mirror. Generates transparent flat lay "
-            "images and overlays them on the user's body in real-time — this is the smart "
-            "mirror's core feature. Use this for outfit recommendations (1-4 items). Each item "
-            "MUST include a 'type' field ('top' or 'bottom') so the mirror knows where to "
-            "place it on the body. Call this AFTER search_clothing with your curated picks."
-        ),
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "items": {
-                    "type": "array",
-                    "description": "Items to display on the mirror (up to 10).",
-                    "items": {
-                        "type": "object",
-                        "properties": {
-                            "title": {"type": "string"},
-                            "price": {"type": "string"},
-                            "image_url": {"type": "string"},
-                            "link": {"type": "string"},
-                            "source": {"type": "string"},
-                            "product_id": {"type": "string"},
-                            "type": {
-                                "type": "string",
-                                "enum": ["top", "bottom", "shoes", "accessory"],
-                            },
-                        },
-                        "required": ["title", "image_url", "product_id", "type"],
+        "type": "function",
+        "function": {
+            "name": "search_clothing",
+            "description": "Search for clothing items using Google Shopping. Returns results to YOU only \u2014 the user does NOT see these results. Use this to gather options, then call display_product with your curated picks to overlay them on the user's body. Write detailed queries including gender, style keywords, and price ceiling when relevant, e.g. 'mens black minimalist sneakers under $150' or 'women oversized linen blazer summer'.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "Detailed shopping search query with gender, style, and price hints"
                     },
-                    "maxItems": 10,
+                    "num_results": {
+                        "type": "integer",
+                        "description": "Number of results to return (default 12, max 20)",
+                        "default": 12
+                    }
                 },
-                "outfit_name": {
-                    "type": "string",
-                    "description": "Name for this outfit combination",
-                },
-            },
-            "required": ["items"],
-        },
+                "required": [
+                    "query"
+                ]
+            }
+        }
     },
     {
-        "name": "take_photo",
-        "description": (
-            "Capture a photo of the user standing at the mirror. Use this ONCE during "
-            "Phase 1 to transition into the outfit check — call it right after your opening "
-            "roast line. The photo is returned as an image you can react to. Do NOT call "
-            "this more than once per session."
-        ),
-        "input_schema": {
-            "type": "object",
-            "properties": {},
-            "required": [],
-        },
+        "type": "function",
+        "function": {
+            "name": "search_gmail",
+            "description": "Search the user's Gmail for specific information. Use this when the user mentions a specific purchase, brand, or item and you want to look up details. Returns email subjects and snippets matching the query. Do NOT use this for general profile building \u2014 that data is already in your context.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "Gmail search query, e.g. 'from:zara order confirmation' or 'subject:Nike receipt'"
+                    },
+                    "max_results": {
+                        "type": "integer",
+                        "description": "Max emails to return (default 5)",
+                        "default": 5
+                    }
+                },
+                "required": [
+                    "query"
+                ]
+            }
+        }
     },
     {
-        "name": "end_session",
-        "description": (
-            "End the current styling session. Call this when the user says goodbye, "
-            "they're done, or the conversation reaches a natural stopping point. "
-            "Say your goodbye/wrap-up line BEFORE calling this tool in the same response."
-        ),
-        "input_schema": {
-            "type": "object",
-            "properties": {},
-            "required": [],
-        },
+        "type": "function",
+        "function": {
+            "name": "search_purchases",
+            "description": "Search the user's full purchase history stored in the database. Use this to look up specific purchases by brand, category, price range, or date range. This searches ALL purchases ever scraped \u2014 not just the ones in your context. Use when the user asks about past purchases, a specific brand, or when you want to reference items from their historical purchases.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "Free-text search against brand and item name, e.g. 'leather jacket' or 'running shoes'"
+                    },
+                    "brand": {
+                        "type": "string",
+                        "description": "Exact brand filter, e.g. 'Nike' or 'Zara'"
+                    },
+                    "category": {
+                        "type": "string",
+                        "description": "Exact category filter, e.g. 'shoes' or 'tops'"
+                    },
+                    "min_price": {
+                        "type": "number",
+                        "description": "Minimum price filter"
+                    },
+                    "max_price": {
+                        "type": "number",
+                        "description": "Maximum price filter"
+                    },
+                    "date_from": {
+                        "type": "string",
+                        "description": "Start date filter (YYYY-MM-DD format)"
+                    },
+                    "date_to": {
+                        "type": "string",
+                        "description": "End date filter (YYYY-MM-DD format)"
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Max results to return (default 20, max 50)",
+                        "default": 20
+                    },
+                    "fashion_only": {
+                        "type": "boolean",
+                        "description": "If true, only return fashion items. Default: false (return all)."
+                    }
+                },
+                "required": []
+            }
+        }
     },
     {
-        "name": "give_recommendation",
-        "description": (
-            "Search for clothing items from specific brands to build outfit recommendations. "
-            "Call this tool when you're ready to find tops and bottoms to recommend. "
-            "Returns a categorized list of available clothing items (tops and bottoms) from the "
-            "requested brands, with brand diversity ensured. After getting results, use "
-            "display_product to show your curated picks to the user."
-        ),
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "brands": {
-                    "type": "array",
-                    "items": {"type": "string"},
-                    "description": (
-                        "List of 3-7 clothing brand names to search for. "
-                        "Mix the user's favorite brands with popular brands for variety."
-                    ),
+        "type": "function",
+        "function": {
+            "name": "search_calendar",
+            "description": "Search the user's calendar events by keyword, date range, or location. Use this to find upcoming or recent events to tie outfit recommendations to. Events include title, time, location, and attendee count. Cancelled events are excluded.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "Free-text search against event title and location, e.g. 'dinner' or 'conference'"
+                    },
+                    "date_from": {
+                        "type": "string",
+                        "description": "Start date filter (YYYY-MM-DD format)"
+                    },
+                    "date_to": {
+                        "type": "string",
+                        "description": "End date filter (YYYY-MM-DD format)"
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Max results to return (default 20, max 50)",
+                        "default": 20
+                    }
                 },
-                "gender": {
-                    "type": "string",
-                    "enum": ["mens", "womens", "unisex"],
-                    "description": "Gender category for clothing search.",
-                },
-                "style_notes": {
-                    "type": "string",
-                    "description": (
-                        "Brief notes about the user's style to guide search "
-                        "(e.g. 'casual streetwear', 'business casual', 'athleisure')."
-                    ),
-                },
-            },
-            "required": ["brands", "gender"],
-        },
+                "required": []
+            }
+        }
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "display_product",
+            "description": "PREFERRED tool for showing clothing on the mirror. Generates transparent flat lay images and overlays them on the user's body in real-time \u2014 this is the smart mirror's core feature. Use this for outfit recommendations (1-4 items). Each item MUST include a 'type' field ('top' or 'bottom') so the mirror knows where to place it on the body. Call this AFTER search_clothing with your curated picks.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "items": {
+                        "type": "array",
+                        "description": "Items to display on the mirror (up to 10).",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "title": {
+                                    "type": "string"
+                                },
+                                "price": {
+                                    "type": "string"
+                                },
+                                "image_url": {
+                                    "type": "string"
+                                },
+                                "link": {
+                                    "type": "string"
+                                },
+                                "source": {
+                                    "type": "string"
+                                },
+                                "product_id": {
+                                    "type": "string"
+                                },
+                                "type": {
+                                    "type": "string",
+                                    "enum": [
+                                        "top",
+                                        "bottom",
+                                        "shoes",
+                                        "accessory"
+                                    ]
+                                }
+                            },
+                            "required": [
+                                "title",
+                                "image_url",
+                                "product_id",
+                                "type"
+                            ]
+                        },
+                        "maxItems": 10
+                    },
+                    "outfit_name": {
+                        "type": "string",
+                        "description": "Name for this outfit combination"
+                    }
+                },
+                "required": [
+                    "items"
+                ]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "take_photo",
+            "description": "Capture a photo of the user standing at the mirror. Use this ONCE during Phase 1 to transition into the outfit check \u2014 call it right after your opening roast line. The photo is returned as an image you can react to. Do NOT call this more than once per session.",
+            "parameters": {
+                "type": "object",
+                "properties": {},
+                "required": []
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "end_session",
+            "description": "End the current styling session. Call this when the user says goodbye, they're done, or the conversation reaches a natural stopping point. Say your goodbye/wrap-up line BEFORE calling this tool in the same response.",
+            "parameters": {
+                "type": "object",
+                "properties": {},
+                "required": []
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "give_recommendation",
+            "description": "Search for clothing items from specific brands to build outfit recommendations. Call this tool when you're ready to find tops and bottoms to recommend. Returns a categorized list of available clothing items (tops and bottoms) from the requested brands, with brand diversity ensured. After getting results, use display_product to show your curated picks to the user.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "brands": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "description": "List of 3-7 clothing brand names to search for. Mix the user's favorite brands with popular brands for variety."
+                    },
+                    "gender": {
+                        "type": "string",
+                        "enum": [
+                            "mens",
+                            "womens",
+                            "unisex"
+                        ],
+                        "description": "Gender category for clothing search."
+                    },
+                    "style_notes": {
+                        "type": "string",
+                        "description": "Brief notes about the user's style to guide search (e.g. 'casual streetwear', 'business casual', 'athleisure')."
+                    }
+                },
+                "required": [
+                    "brands",
+                    "gender"
+                ]
+            }
+        }
+    }
 ]
+
+
 
 def _parse_price(price_str: str) -> float | None:
     """Extract numeric price from string like '$595.00'."""

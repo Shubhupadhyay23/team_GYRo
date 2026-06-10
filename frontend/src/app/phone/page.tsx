@@ -9,6 +9,8 @@ import {
   startScrape,
   submitOnboarding,
   UserProfile,
+  signup,
+  login,
 } from "@/lib/api";
 import type { OnboardingData } from "@/lib/types";
 import GoogleSignIn from "@/components/phone/GoogleSignIn";
@@ -162,39 +164,43 @@ function SignInView({
   error: string;
   setError: (e: string) => void;
 }) {
+  const [isLogin, setIsLogin] = useState(false);
   const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [phone, setPhone] = useState("");
   const [phoneError, setPhoneError] = useState("");
   const [selfie, setSelfie] = useState<string | null>(null);
-  const [oauthUser, setOauthUser] = useState<UserProfile | null>(null);
+  const [loading, setLoading] = useState(false);
 
-  const handleGoogleSuccess = useCallback(
-    (user: UserProfile) => {
-      setOauthUser(user);
-      if (!name && user.name) setName(user.name);
-    },
-    [name]
-  );
-
-  const handleContinue = useCallback(() => {
-    if (!oauthUser) {
-      setError("Please sign in with Google first.");
+  const handleSubmit = useCallback(async () => {
+    if (!email.trim() || !password.trim()) {
+      setError("Email and password are required.");
       return;
     }
-    if (!name.trim()) {
+    if (!isLogin && !name.trim()) {
       setError("Please enter your name.");
       return;
     }
-    if (!phone.trim()) {
-      setPhoneError("Phone number required");
-      setError("Please enter your phone number.");
-      return;
-    }
-    // Clear errors and proceed
+    
     setPhoneError("");
     setError("");
-    onComplete(oauthUser, selfie, name.trim(), phone.trim());
-  }, [oauthUser, selfie, name, phone, onComplete, setError]);
+    setLoading(true);
+
+    try {
+      let user: UserProfile;
+      if (isLogin) {
+        user = await login(email.trim(), password);
+      } else {
+        user = await signup(name.trim(), email.trim(), password, phone.trim());
+      }
+      onComplete(user, selfie, user.name || name.trim(), user.phone || phone.trim());
+    } catch (err: any) {
+      setError(err.message || "Authentication failed");
+    } finally {
+      setLoading(false);
+    }
+  }, [isLogin, email, password, name, phone, selfie, onComplete, setError]);
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen p-4 gap-4">
@@ -203,48 +209,68 @@ function SignInView({
         <p className="text-zinc-500 text-sm">Your AI stylist awaits</p>
       </div>
 
-      <SelfieCapture onCapture={setSelfie} />
+      {!isLogin && <SelfieCapture onCapture={setSelfie} />}
+
+      {!isLogin && (
+        <div className="w-full max-w-sm">
+          <label className="block text-sm font-semibold mb-1">Your name</label>
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Enter your name"
+            className="w-full px-3 py-2.5 border border-zinc-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-zinc-900"
+          />
+        </div>
+      )}
 
       <div className="w-full max-w-sm">
-        <label className="block text-sm font-semibold mb-1">Your name</label>
+        <label className="block text-sm font-semibold mb-1">Email</label>
         <input
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder="Enter your name"
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="your@email.com"
           className="w-full px-3 py-2.5 border border-zinc-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-zinc-900"
         />
       </div>
 
       <div className="w-full max-w-sm">
-        <PhoneInput
-          value={phone}
-          onChange={setPhone}
-          error={phoneError}
+        <label className="block text-sm font-semibold mb-1">Password</label>
+        <input
+          type="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          placeholder="••••••••"
+          className="w-full px-3 py-2.5 border border-zinc-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-zinc-900"
         />
       </div>
 
-      {!oauthUser ? (
-        <GoogleSignIn
-          onSuccess={handleGoogleSuccess}
-          onError={setError}
-        />
-      ) : (
-        <div className="flex items-center gap-2 text-sm text-green-600">
-          <span>✓</span>
-          <span>Signed in as {oauthUser.email}</span>
+      {!isLogin && (
+        <div className="w-full max-w-sm">
+          <PhoneInput
+            value={phone}
+            onChange={setPhone}
+            error={phoneError}
+          />
         </div>
       )}
 
-      {oauthUser && (
-        <button
-          onClick={handleContinue}
-          className="w-full max-w-sm bg-zinc-900 text-white rounded-xl py-3 text-sm font-semibold"
-        >
-          Continue
-        </button>
-      )}
+      <button
+        onClick={handleSubmit}
+        disabled={loading}
+        className="w-full max-w-sm bg-zinc-900 text-white rounded-xl py-3 text-sm font-semibold disabled:opacity-50"
+      >
+        {loading ? "Please wait..." : isLogin ? "Log In" : "Sign Up"}
+      </button>
 
       {error && <p className="text-red-500 text-sm text-center">{error}</p>}
+      
+      <button 
+        onClick={() => { setIsLogin(!isLogin); setError(""); }}
+        className="text-sm text-zinc-500 underline mt-2"
+      >
+        {isLogin ? "Need an account? Sign up" : "Already have an account? Log in"}
+      </button>
     </div>
   );
 }
