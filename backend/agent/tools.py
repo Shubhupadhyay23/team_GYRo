@@ -235,8 +235,12 @@ TOOL_DEFINITIONS = [
             "description": "Capture a photo of the user standing at the mirror. Use this ONCE during Phase 1 to transition into the outfit check \u2014 call it right after your opening roast line. The photo is returned as an image you can react to. Do NOT call this more than once per session.",
             "parameters": {
                 "type": "object",
-                "properties": {},
-                "required": []
+                "properties": {
+                    "reason": {
+                        "type": "string",
+                        "description": "Short explanation of why you are taking the photo"
+                    }
+                }
             }
         }
     },
@@ -247,8 +251,12 @@ TOOL_DEFINITIONS = [
             "description": "End the current styling session. Call this when the user says goodbye, they're done, or the conversation reaches a natural stopping point. Say your goodbye/wrap-up line BEFORE calling this tool in the same response.",
             "parameters": {
                 "type": "object",
-                "properties": {},
-                "required": []
+                "properties": {
+                    "reason": {
+                        "type": "string",
+                        "description": "Short explanation of why you are ending the session"
+                    }
+                }
             }
         }
     },
