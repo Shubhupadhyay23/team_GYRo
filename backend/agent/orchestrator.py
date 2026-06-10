@@ -296,13 +296,11 @@ class MiraOrchestrator:
         """Validate conversation history and truncate to last valid point if corrupted.
 
         Checks:
-        1. Alternating user → assistant → user roles (tool_result messages are user role)
-        2. Every assistant message with tool_use blocks is immediately followed by a
-           user message with matching tool_result blocks
+        1. Alternating roles (user, assistant, tool). Consecutive tool roles are allowed.
+        2. Assistant messages with tool_calls must be followed by a tool message.
 
         If corruption is found, truncates history to the last valid position and logs
-        a warning. This is defense-in-depth — the event lock should prevent corruption,
-        but edge cases or future bugs could still cause issues.
+        a warning.
         """
         history = session.conversation_history
         if not history:
@@ -320,63 +318,26 @@ class MiraOrchestrator:
                 print(f"[mira] History validation: first message is {role}, expected user — truncating")
                 break
 
-            # Check alternating roles (user and assistant)
             if i > 0:
                 prev_role = history[i - 1].get("role")
-                # After user, expect assistant; after assistant, expect user
-                if prev_role == role and role != "user":
-                    # Two consecutive assistant messages — corruption
+                
+                # Check for consecutive identical roles (except tools)
+                if prev_role == role and role in ("user", "assistant"):
                     print(f"[mira] History validation: consecutive {role} messages at index {i} — truncating")
                     break
-                if prev_role == "user" and role == "user":
-                    # Two consecutive user messages — corruption (unless first is tool_result)
-                    # A tool_result user message followed by a regular user message is invalid
-                    print(f"[mira] History validation: consecutive user messages at index {i} — truncating")
-                    break
-
-            # If this is an assistant message with tool_use, verify next message has tool_results
-            if role == "assistant":
-                content = msg.get("content", [])
-                has_tool_use = False
-                if isinstance(content, list):
-                    has_tool_use = any(
-                        (getattr(block, "type", None) == "tool_use")
-                        or (isinstance(block, dict) and block.get("type") == "tool_use")
-                        for block in content
-                    )
-
-                if has_tool_use:
-                    # Must be followed by a user message with tool_result blocks
-                    if i + 1 >= len(history):
-                        print(f"[mira] History validation: tool_use at index {i} with no following tool_result — truncating")
-                        break
-                    next_msg = history[i + 1]
-                    if next_msg.get("role") != "user":
-                        print(f"[mira] History validation: tool_use at index {i} followed by {next_msg.get('role')} — truncating")
-                        break
-                    next_content = next_msg.get("content", [])
-                    has_tool_result = isinstance(next_content, list) and any(
-                        isinstance(block, dict) and block.get("type") == "tool_result"
-                        for block in next_content
-                    )
-                    if not has_tool_result:
-                        print(f"[mira] History validation: tool_use at index {i} followed by user message without tool_result — truncating")
+                    
+                # If prev was assistant with tool_calls, this MUST be a tool
+                if prev_role == "assistant" and "tool_calls" in history[i - 1]:
+                    if role != "tool":
+                        print(f"[mira] History validation: expected tool role after tool_calls at index {i} — truncating")
                         break
 
-            # Check for empty text content blocks in assistant messages
-            if role == "assistant":
-                content = msg.get("content", [])
-                if not isinstance(content, list):
-                    content = []
-                has_empty_text = any(
-                    isinstance(block, dict)
-                    and block.get("type") == "text"
-                    and not block.get("text", "").strip()
-                    for block in content
-                )
-                if has_empty_text:
-                    print(f"[mira] History validation: empty text block at index {i} — truncating")
-                    break
+            # Check for empty text content blocks
+            content = msg.get("content")
+            if isinstance(content, str) and not content.strip() and role != "assistant":
+                # assistant content can be empty if it only has tool_calls
+                print(f"[mira] History validation: empty text block at index {i} — truncating")
+                break
 
             valid_up_to = i + 1
             i += 1
@@ -406,57 +367,31 @@ class MiraOrchestrator:
 
         for idx in range(compact_boundary):
             msg = history[idx]
+            role = msg.get("role")
             content = msg.get("content")
-            if not isinstance(content, list):
+
+            # Truncate large tool_result content strings
+            if role == "tool" and isinstance(content, str):
+                if len(content) > MAX_TOOL_RESULT_CHARS:
+                    msg["content"] = content[:MAX_TOOL_RESULT_CHARS] + " ...[truncated]"
+                    compacted_tool_results += 1
                 continue
 
-            new_content = []
-            for block in content:
-                # --- dict blocks (user messages, tool_result) ---
-                if isinstance(block, dict):
-                    btype = block.get("type")
-
-                    # Replace base64 images with a lightweight placeholder
-                    if btype == "image":
-                        new_content.append({
-                            "type": "text",
-                            "text": "[image removed — earlier in conversation]",
-                        })
-                        compacted_images += 1
-                        continue
-
-                    # Truncate large tool_result content strings
-                    if btype == "tool_result":
-                        rc = block.get("content", "")
-                        if isinstance(rc, str) and len(rc) > MAX_TOOL_RESULT_CHARS:
-                            block = {**block, "content": rc[:MAX_TOOL_RESULT_CHARS] + " ...[truncated]"}
-                            compacted_tool_results += 1
-                        # tool_result content can also be a list (take_photo returns list with image)
-                        elif isinstance(rc, list):
-                            new_rc = []
-                            for sub in rc:
-                                if isinstance(sub, dict) and sub.get("type") == "image":
-                                    new_rc.append({"type": "text", "text": "[image removed — earlier in conversation]"})
-                                    compacted_images += 1
-                                else:
-                                    new_rc.append(sub)
-                            block = {**block, "content": new_rc}
-
+            # Replace base64 images with a lightweight placeholder
+            if isinstance(content, list):
+                new_content = []
+                for block in content:
+                    if isinstance(block, dict):
+                        btype = block.get("type")
+                        if btype == "image_url":
+                            new_content.append({
+                                "type": "text",
+                                "text": "[image removed — earlier in conversation]",
+                            })
+                            compacted_images += 1
+                            continue
                     new_content.append(block)
-                    continue
-
-                # --- SDK ContentBlock objects (assistant messages) ---
-                if hasattr(block, "type") and block.type == "image":
-                    new_content.append({
-                        "type": "text",
-                        "text": "[image removed — earlier in conversation]",
-                    })
-                    compacted_images += 1
-                    continue
-
-                new_content.append(block)
-
-            history[idx]["content"] = new_content
+                msg["content"] = new_content
 
         if compacted_images or compacted_tool_results:
             print(
@@ -530,45 +465,27 @@ class MiraOrchestrator:
 
         for idx in range(compact_boundary):
             msg = history[idx]
+            role = msg.get("role")
             content = msg.get("content")
-            if not isinstance(content, list):
+
+            if role == "tool" and isinstance(content, str):
+                if len(content) > MAX_CHARS:
+                    msg["content"] = content[:MAX_CHARS] + " ...[truncated]"
                 continue
 
-            new_content = []
-            for block in content:
-                if isinstance(block, dict):
-                    btype = block.get("type")
-                    if btype == "image":
-                        new_content.append({
-                            "type": "text",
-                            "text": "[image removed]",
-                        })
-                        continue
-                    if btype == "tool_result":
-                        rc = block.get("content", "")
-                        if isinstance(rc, str) and len(rc) > MAX_CHARS:
-                            block = {**block, "content": rc[:MAX_CHARS] + " ...[truncated]"}
-                        elif isinstance(rc, list):
-                            new_rc = []
-                            for sub in rc:
-                                if isinstance(sub, dict) and sub.get("type") == "image":
-                                    new_rc.append({"type": "text", "text": "[image removed]"})
-                                else:
-                                    new_rc.append(sub)
-                            block = {**block, "content": new_rc}
+            if isinstance(content, list):
+                new_content = []
+                for block in content:
+                    if isinstance(block, dict):
+                        btype = block.get("type")
+                        if btype == "image_url":
+                            new_content.append({
+                                "type": "text",
+                                "text": "[image removed]",
+                            })
+                            continue
                     new_content.append(block)
-                    continue
-
-                if hasattr(block, "type") and block.type == "image":
-                    new_content.append({
-                        "type": "text",
-                        "text": "[image removed]",
-                    })
-                    continue
-
-                new_content.append(block)
-
-            history[idx]["content"] = new_content
+                msg["content"] = new_content
 
         print(f"[mira] Emergency compaction done for {session.user_id} (kept last {KEEP_RECENT})")
 
@@ -1026,29 +943,29 @@ class MiraOrchestrator:
         if event_type == "voice":
             transcript = event.get("transcript", "")
             print(f"[mira] USER SAID: {transcript}")
-            return transcript
+            text = event.get("transcript", "[inaudible]")
+            return text
 
         elif event_type == "gesture":
-            gesture = event.get("gesture", "unknown")
-            gesture_descriptions = {
-                "swipe_left": "The user swiped to see the next outfit.",
-                "swipe_right": "The user swiped to go back to the previous outfit.",
-                "thumbs_up": "The user gave a thumbs up (like this item).",
-                "thumbs_down": "The user gave a thumbs down (dislike this item).",
-                "end_of_outfits": "The user has swiped through all available outfits. They've seen everything you've shown so far.",
-            }
-            return gesture_descriptions.get(gesture, f"The user made a {gesture} gesture.")
+            gesture = event.get("gesture")
+            if gesture == "swipe_right":
+                return "[User swiped right to see next item]"
+            elif gesture == "swipe_left":
+                return "[User swiped left to see previous item]"
+            elif gesture == "thumbs_up":
+                return "[User made a thumbs up gesture, indicating they like this]"
+            elif gesture == "thumbs_down":
+                return "[User made a thumbs down gesture, indicating they dislike this]"
+            return f"[User made a {gesture} gesture]"
 
         elif event_type == "pose":
             return [
-                {"type": "text", "text": "The user struck a new pose. Here's what they look like:"},
+                {"type": "text", "text": "The user changed their pose/stance. Current camera view:"},
                 {
-                    "type": "image",
-                    "source": {
-                        "type": "base64",
-                        "media_type": "image/jpeg",
-                        "data": event.get("image_base64", ""),
-                    },
+                    "type": "image_url",
+                    "image_url": {
+                        "url": f"data:image/jpeg;base64,{event.get('image_base64', '')}"
+                    }
                 },
             ]
 
@@ -1056,12 +973,10 @@ class MiraOrchestrator:
             return [
                 {"type": "text", "text": "Here's a snapshot of the user at the mirror:"},
                 {
-                    "type": "image",
-                    "source": {
-                        "type": "base64",
-                        "media_type": "image/jpeg",
-                        "data": event.get("image_base64", ""),
-                    },
+                    "type": "image_url",
+                    "image_url": {
+                        "url": f"data:image/jpeg;base64,{event.get('image_base64', '')}"
+                    }
                 },
             ]
 
