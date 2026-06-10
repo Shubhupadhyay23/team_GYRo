@@ -63,14 +63,18 @@ export default function ChatPage() {
         if (last && last.role === "mira" && last.id.startsWith("mira-stream-")) {
           return [
             ...prev.slice(0, -1),
-            { ...last, text: currentText },
+            { ...last, text: currentText, id: data.is_chunk ? last.id : `mira-done-${Date.now()}` },
           ];
         }
         return [
           ...prev,
-          { id: `mira-stream-${Date.now()}`, role: "mira", text: currentText },
+          { id: data.is_chunk ? `mira-stream-${Date.now()}` : `mira-done-${Date.now()}`, role: "mira", text: currentText },
         ];
       });
+
+      if (!data.is_chunk) {
+        miraBufferRef.current = "";
+      }
     });
 
     socket.on("tool_result", (data: { type: string; query: string; items: ProductItem[] }) => {
