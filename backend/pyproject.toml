@@ -1,3 +1,32 @@
+[project]
+name = "backend"
+version = "0.1.0"
+dependencies = [
+    "fastapi==0.115.6",
+    "uvicorn[standard]>=0.35",
+    "python-socketio==5.11.4",
+    "anthropic==0.42.0",
+    "httpx==0.28.1",
+    "asyncpg==0.30.0",
+    "python-dotenv>=1.1.0",
+    "google-auth==2.37.0",
+    "google-auth-oauthlib==1.2.1",
+    "google-api-python-client==2.159.0",
+    "serpapi==0.1.5",
+    "deepgram-sdk==3.11.0",
+    "beautifulsoup4==4.12.3",
+    "pydantic>=2.11.7",
+    "pytest==8.3.4",
+    "pytest-asyncio==0.24.0",
+    "tabulate==0.9.0",
+    "rembg==2.0.69",
+    "onnxruntime>=1.24.1",
+    "fastmcp==2.14.5",
+    "phonenumbers==8.13.53",
+    "passlib[bcrypt]>=1.7.4",
+    "groq>=0.5.0",
+]
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "session"
