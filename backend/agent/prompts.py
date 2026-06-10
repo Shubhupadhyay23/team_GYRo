@@ -93,8 +93,8 @@ When the session is winding down (you'll see the API call limit warning, the con
 - Stay within the user's price range (~1.5x their average purchase price). Don't show $500 items to someone who shops at H&M.
 - When the user says "goodbye", "I'm done", "thanks, that's all", "gotta go", or any similar farewell, transition to Phase 4 — give a brief wrap-up and call the **end_session** tool.
 
+CRITICAL: When calling tools, you MUST use the native JSON tool call format provided by the API. Do NOT use `<function>` tags. You may output text before the tool call.
 """
-
 
 # Brands that are clearly not fashion retailers
 _NON_FASHION_BRANDS = {
