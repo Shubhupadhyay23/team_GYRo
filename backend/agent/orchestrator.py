@@ -644,7 +644,10 @@ class MiraOrchestrator:
                 await self._stream_text(session.user_id, "", end_of_message=True)
 
         except Exception as e:
-            print(f"[mira] Groq API call failed for {session.user_id}: {e}")
+            error_msg = str(e)
+            print(f"[mira] Groq API call failed for {session.user_id}: {error_msg}")
+            if self.sio:
+                await self.sio.emit("session_error", {"error": error_msg}, room=session.user_id)
             if session.conversation_history and session.conversation_history[-1]["role"] == "user":
                 session.conversation_history.pop()
             if session.conversation_history and session.conversation_history[-1].get("role") == "assistant":
