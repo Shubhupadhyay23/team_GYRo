@@ -131,8 +131,7 @@ TOOL_DEFINITIONS = [
                         "type": "boolean",
                         "description": "If true, only return fashion items. Default: false (return all)."
                     }
-                },
-                "required": []
+                }
             }
         }
     },
@@ -161,8 +160,7 @@ TOOL_DEFINITIONS = [
                         "description": "Max results to return (default 20, max 50)",
                         "default": 20
                     }
-                },
-                "required": []
+                }
             }
         }
     },
@@ -240,7 +238,8 @@ TOOL_DEFINITIONS = [
                         "type": "string",
                         "description": "Short explanation of why you are taking the photo"
                     }
-                }
+                },
+                "required": ["reason"]
             }
         }
     },
@@ -256,7 +255,8 @@ TOOL_DEFINITIONS = [
                         "type": "string",
                         "description": "Short explanation of why you are ending the session"
                     }
-                }
+                },
+                "required": ["reason"]
             }
         }
     },

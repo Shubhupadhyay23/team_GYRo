@@ -13,7 +13,7 @@ interface PhoneInputProps {
 export default function PhoneInput({
   value,
   onChange,
-  defaultCountry = "US",
+  defaultCountry = "IN",
   error,
 }: PhoneInputProps) {
   const [isValid, setIsValid] = useState<boolean | null>(null);
@@ -65,7 +65,7 @@ export default function PhoneInput({
           type="tel"
           value={displayValue}
           onChange={(e) => handleChange(e.target.value)}
-          placeholder="+1 (212) 867-5309"
+          placeholder="+91 98765 43210"
           className={`w-full px-3 py-2.5 pr-10 border rounded-xl text-sm focus:outline-none focus:ring-2 ${
             showValidation
               ? isValid

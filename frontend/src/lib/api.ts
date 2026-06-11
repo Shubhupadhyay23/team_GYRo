@@ -1,8 +1,17 @@
 import type { OnboardingData, RecommendationResponse } from "./types";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-const API_BASE =
-  process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:8000";
+const RAW_API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const RAW_API_BASE = process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:8000";
+
+function resolveUrl(url: string) {
+  if (typeof window !== "undefined" && url.includes("localhost")) {
+    return url.replace("localhost", window.location.hostname);
+  }
+  return url;
+}
+
+const API_URL = resolveUrl(RAW_API_URL);
+const API_BASE = resolveUrl(RAW_API_BASE);
 
 /** Request helper for the Python backend (absolute URL). */
 async function request<T>(path: string, options?: RequestInit): Promise<T> {

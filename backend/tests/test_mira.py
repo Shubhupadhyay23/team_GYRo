@@ -13,6 +13,17 @@ load_dotenv()
 
 from agent.prompts import build_system_prompt
 from agent.tools import TOOL_DEFINITIONS, execute_tool
+from datetime import datetime, timedelta
+
+now = datetime.now()
+day_1 = (now - timedelta(days=5)).strftime("%Y-%m-%d")
+day_2 = (now - timedelta(days=10)).strftime("%Y-%m-%d")
+day_3 = (now - timedelta(days=15)).strftime("%Y-%m-%d")
+day_4 = (now - timedelta(days=35)).strftime("%Y-%m-%d")
+day_5 = (now - timedelta(days=45)).strftime("%Y-%m-%d")
+day_6 = (now - timedelta(days=60)).strftime("%Y-%m-%d")
+day_7 = (now - timedelta(days=100)).strftime("%Y-%m-%d")
+day_8 = (now - timedelta(days=120)).strftime("%Y-%m-%d")
 
 # Mock user data for testing
 MOCK_PROFILE = {
@@ -26,14 +37,14 @@ MOCK_PROFILE = {
 }
 
 MOCK_PURCHASES = [
-    {"brand": "Nike", "item_name": "Air Force 1 '07", "category": "shoes", "price": 115.0, "date": "2026-02-10"},
-    {"brand": "Zara", "item_name": "Oversized Blazer", "category": "outerwear", "price": 89.99, "date": "2026-02-05"},
-    {"brand": "Uniqlo", "item_name": "Heattech Crew Neck T-Shirt", "category": "tops", "price": 14.90, "date": "2026-01-28"},
-    {"brand": "ASOS", "item_name": "Slim Fit Chinos", "category": "bottoms", "price": 35.00, "date": "2026-01-10"},
-    {"brand": "Nike", "item_name": "Tech Fleece Joggers", "category": "bottoms", "price": 110.0, "date": "2025-12-15"},
-    {"brand": "Zara", "item_name": "Minimalist Leather Belt", "category": "accessories", "price": 29.90, "date": "2025-12-01"},
-    {"brand": "ASOS", "item_name": "Oversized Hoodie", "category": "tops", "price": 42.00, "date": "2025-11-28"},
-    {"brand": "Nike", "item_name": "Dunk Low Retro", "category": "shoes", "price": 110.0, "date": "2025-11-15"},
+    {"brand": "Nike", "item_name": "Air Force 1 '07", "category": "shoes", "price": 115.0, "date": day_1},
+    {"brand": "Zara", "item_name": "Oversized Blazer", "category": "outerwear", "price": 89.99, "date": day_2},
+    {"brand": "Uniqlo", "item_name": "Heattech Crew Neck T-Shirt", "category": "tops", "price": 14.90, "date": day_3},
+    {"brand": "ASOS", "item_name": "Slim Fit Chinos", "category": "bottoms", "price": 35.00, "date": day_4},
+    {"brand": "Nike", "item_name": "Tech Fleece Joggers", "category": "bottoms", "price": 110.0, "date": day_5},
+    {"brand": "Zara", "item_name": "Minimalist Leather Belt", "category": "accessories", "price": 29.90, "date": day_6},
+    {"brand": "ASOS", "item_name": "Oversized Hoodie", "category": "tops", "price": 42.00, "date": day_7},
+    {"brand": "Nike", "item_name": "Dunk Low Retro", "category": "shoes", "price": 110.0, "date": day_8},
 ]
 
 MOCK_PAST_SESSIONS = [
@@ -95,19 +106,19 @@ async def test_search_clothing_tool():
 
     print("PASSED - search_clothing returns results to Claude only (no frontend_payload)")
 
-    # Test present_items tool
-    print("\n--- present_items Tool ---")
+    # Test display_product tool
+    print("\n--- display_product Tool ---")
     curated = result["results"][:2]  # Pick top 2
     present_result = await execute_tool(
-        tool_name="present_items",
+        tool_name="display_product",
         tool_input={"items": curated},
         user_context={},
     )
-    assert "frontend_payload" in present_result, "present_items SHOULD include frontend_payload"
-    assert present_result["frontend_payload"]["type"] == "clothing_results"
-    assert present_result["presented"] == 2
-    print(f"Presented {present_result['presented']} items via present_items")
-    print("PASSED - present_items creates frontend_payload for Socket.io broadcast")
+    assert "frontend_payload" in present_result, "display_product SHOULD include frontend_payload"
+    assert present_result["frontend_payload"]["type"] == "display_product"
+    assert present_result["displayed"] == 2
+    print(f"Displayed {present_result['displayed']} items via display_product")
+    print("PASSED - display_product creates frontend_payload for Socket.io broadcast")
 
 
 def _mock_tool_result(tool_name: str) -> str:
@@ -119,7 +130,7 @@ def _mock_tool_result(tool_name: str) -> str:
              "image_url": "https://example.com/tee.jpg", "link": "https://example.com/tee",
              "product_id": "mock-001", "rating": 4.5},
         ]}),
-        "present_items": json.dumps({"presented": 1, "items": []}),
+        "display_product": json.dumps({"displayed": 1, "items": []}),
     }
     return mock_results.get(tool_name, json.dumps({"status": "ok"}))
 
