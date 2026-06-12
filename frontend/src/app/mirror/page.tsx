@@ -573,6 +573,12 @@ function MirrorPage() {
     };
   }, [userId]);
 
+  // Keep track of when Mira finishes speaking to ignore echo transcripts during processing/STT lag
+  const lastSpokeTimeRef = useRef<number>(0);
+  useEffect(() => {
+    lastSpokeTimeRef.current = Date.now();
+  }, [mira.isSpeaking]);
+
   // ── Flush queued transcripts when mira stops speaking ──
   useEffect(() => {
     if (!mira.isSpeaking && pendingTranscriptRef.current && userId) {
@@ -587,6 +593,17 @@ function MirrorPage() {
   // ── Forward final STT transcripts (interrupt Mira if speaking) ──
   useEffect(() => {
     if (!stt.transcript || !userId) return;
+
+    // Echo prevention logic: Ignore speech transcription during and immediately after Mira speaks.
+    const now = Date.now();
+    const silenceGraceMs = 1500;
+    const timeSinceSpeech = now - lastSpokeTimeRef.current;
+
+    if (mira.isSpeaking || timeSinceSpeech < silenceGraceMs) {
+      console.log(`[Mirror:EchoPrevention] Ignored feedback transcript "${stt.transcript}" (timeSinceSpeech=${timeSinceSpeech}ms, isSpeaking=${mira.isSpeaking})`);
+      stt.resetTranscript();
+      return;
+    }
 
     if (mira.isSpeaking) {
       // INTERRUPT: stop TTS/avatar and tell backend to abort the stream
