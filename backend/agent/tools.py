@@ -238,8 +238,7 @@ TOOL_DEFINITIONS = [
                         "type": "string",
                         "description": "Short explanation of why you are taking the photo"
                     }
-                },
-                "required": ["reason"]
+                }
             }
         }
     },
@@ -255,8 +254,7 @@ TOOL_DEFINITIONS = [
                         "type": "string",
                         "description": "Short explanation of why you are ending the session"
                     }
-                },
-                "required": ["reason"]
+                }
             }
         }
     },

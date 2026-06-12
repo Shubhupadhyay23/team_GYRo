@@ -113,7 +113,10 @@ export function usePoseDetection({
           });
         }
       } catch (err) {
-        console.warn("[MirrorV2:Pose] Frame error:", err);
+        const errMsg = err instanceof Error ? err.message : String(err);
+        if (!errMsg.includes("XNNPACK")) {
+          console.warn("[MirrorV2:Pose] Frame error:", err);
+        }
       }
 
       animFrameRef.current = requestAnimationFrame(detectPose);

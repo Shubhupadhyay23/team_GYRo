@@ -16,6 +16,7 @@ export interface DisplayProductItem {
  */
 export function mapToClothingItems(items: DisplayProductItem[]): ClothingItem[] {
   const catMap: Record<string, "tops" | "bottoms"> = { top: "tops", bottom: "bottoms" };
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
 
   // Log each item's readiness for canvas overlay
   for (const item of items) {
@@ -28,13 +29,18 @@ export function mapToClothingItems(items: DisplayProductItem[]): ClothingItem[] 
 
   const result = items
     .filter((i) => i.type === "top" || i.type === "bottom")
-    .filter((i) => i.cleaned_image_url || i.flat_image_url) // flat lays only
-    .map((i) => ({
-      id: i.product_id || crypto.randomUUID(),
-      category: catMap[i.type!],
-      imageUrl: i.cleaned_image_url || i.flat_image_url || "",
-      name: i.title,
-    }));
+    .map((i) => {
+      let imgUrl = i.cleaned_image_url || i.flat_image_url || i.image_url || "";
+      if (imgUrl && (imgUrl.startsWith("http://") || imgUrl.startsWith("https://")) && !imgUrl.includes("/api/proxy-image")) {
+        imgUrl = `${apiUrl}/api/proxy-image?url=${encodeURIComponent(imgUrl)}`;
+      }
+      return {
+        id: i.product_id || crypto.randomUUID(),
+        category: catMap[i.type!],
+        imageUrl: imgUrl,
+        name: i.title,
+      };
+    });
 
   console.log(`[MirrorV2:MapClothing] ${items.length} items in → ${result.length} canvas items out (${items.length - result.length} filtered)`);
   return result;

@@ -80,14 +80,21 @@ export function processToolResult(data: ToolResultData): ProcessedToolResult | n
 function mapItemsToCards(
   items: NonNullable<ToolResultData["items"]>,
 ): ProductCard[] {
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
   return items
     .filter((it) => it.image_url)
-    .map((it) => ({
-      product_id: it.product_id || crypto.randomUUID(),
-      title: it.title,
-      price: it.price || "",
-      image_url: it.image_url!,
-      link: it.link || "",
-      source: it.source || "",
-    }));
+    .map((it) => {
+      let imgUrl = it.image_url!;
+      if (imgUrl.startsWith("http://") || imgUrl.startsWith("https://")) {
+        imgUrl = `${apiUrl}/api/proxy-image?url=${encodeURIComponent(imgUrl)}`;
+      }
+      return {
+        product_id: it.product_id || crypto.randomUUID(),
+        title: it.title,
+        price: it.price || "",
+        image_url: imgUrl,
+        link: it.link || "",
+        source: it.source || "",
+      };
+    });
 }

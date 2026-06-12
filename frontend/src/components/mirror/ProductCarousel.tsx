@@ -153,6 +153,24 @@ export default function ProductCarousel({
                 height: 110,
                 objectFit: "cover",
               }}
+              onError={(e) => {
+                const currentSrc = e.currentTarget.src;
+                // If the proxied URL failed, extract and try the original merchant URL directly
+                if (currentSrc.includes("/api/proxy-image?url=")) {
+                  try {
+                    const urlObj = new URL(currentSrc);
+                    const originalUrl = urlObj.searchParams.get("url");
+                    if (originalUrl) {
+                      e.currentTarget.src = originalUrl;
+                      return;
+                    }
+                  } catch (err) {
+                    console.error("[ProductCarousel] Failed to parse proxy fallback URL:", err);
+                  }
+                }
+                // If original URL also fails or is not found, use a stylish fallback placeholder image
+                e.currentTarget.src = "https://images.unsplash.com/photo-1523381210434-271e8be1f52b?w=400&auto=format&fit=crop&q=60";
+              }}
             />
             <div style={{ padding: "6px 8px" }}>
               <div

@@ -4,13 +4,13 @@ import os
 import uuid
 from uuid import UUID
 
-from groq import AsyncGroq
+from openai import AsyncOpenAI
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from starlette.middleware.cors import CORSMiddleware
 import socketio
 
-from routers import auth, queue, users, tts, admin, sessions
+from routers import auth, queue, users, tts, admin, sessions, laptop
 from scraper.routes import router as scraper_router
 from judges.routes import router as judges_router
 from agent.orchestrator import MiraOrchestrator, generate_outfit_recommendations, update_outfit_reaction, _outfits_to_display_payloads
@@ -47,6 +47,7 @@ app.include_router(judges_router)
 app.include_router(tts.router)
 app.include_router(admin.router)
 app.include_router(sessions.router)
+app.include_router(laptop.router)
 
 # Make sio and Mira accessible to routes
 app.state.sio = sio
@@ -57,6 +58,31 @@ app.state.mira = mira
 @app.get("/health")
 async def health():
     return {"status": "ok"}
+
+
+@app.get("/api/proxy-image")
+async def proxy_image(url: str):
+    from fastapi.responses import StreamingResponse
+    import io
+    import httpx
+    if not url:
+        raise HTTPException(status_code=400, detail="Missing url parameter")
+    if not url.startswith(("http://", "https://")):
+        raise HTTPException(status_code=400, detail="Invalid URL protocol")
+    try:
+        async with httpx.AsyncClient(timeout=10, follow_redirects=True, verify=False) as client:
+            headers = {
+                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+                "Accept-Language": "en-US,en;q=0.9",
+            }
+            response = await client.get(url, headers=headers)
+            response.raise_for_status()
+            content_type = response.headers.get("content-type", "image/jpeg")
+            return StreamingResponse(io.BytesIO(response.content), media_type=content_type)
+    except Exception as e:
+        print(f"[ImageProxy] Failed to proxy image '{url}': {e}")
+        raise HTTPException(status_code=502, detail=f"Failed to fetch image: {str(e)}")
 
 
 
@@ -158,12 +184,12 @@ async def test_recommend(body: dict):
     style_notes = body.get("style_notes", "casual")
 
     serper_key = os.getenv("SERPER_API_KEY")
-    groq_key = os.getenv("GROQ_API_KEY")
+    gemini_key = os.getenv("GEMINI_API_KEY")
 
     if not serper_key:
         raise HTTPException(status_code=500, detail="SERPER_API_KEY not configured")
-    if not groq_key:
-        raise HTTPException(status_code=500, detail="GROQ_API_KEY not configured")
+    if not gemini_key:
+        raise HTTPException(status_code=500, detail="GEMINI_API_KEY not configured")
 
     # Step 1: Serper search for tops + bottoms
     print(f"[test/recommend] Searching for {brands} ({gender}, {style_notes})")
@@ -222,13 +248,14 @@ Reply ONLY with valid JSON (no markdown):
   ]
 }}"""
 
-    client = AsyncGroq(
-        api_key=groq_key,
+    client = AsyncOpenAI(
+        api_key=gemini_key,
+        base_url="https://generativelanguage.googleapis.com/v1beta/openai/"
     )
 
     try:
         response = await client.chat.completions.create(
-            model="llama-3.1-8b-instant",
+            model="gemini-3.1-flash-lite",
             max_tokens=1024,
             messages=[{"role": "user", "content": claude_prompt}],
             response_format={"type": "json_object"}
@@ -363,11 +390,26 @@ async def disconnect(sid):
     print(f"[socket] Client disconnected: {sid}")
     user_id = _sid_to_user.pop(sid, None)
     if user_id and user_id in mira.sessions:
-        try:
-            await mira.end_session(user_id)
-            print(f"[socket] Cleaned up session for {user_id}")
-        except Exception as e:
-            print(f"[socket] Failed to clean up session for {user_id}: {e}")
+        # Check if there are other active connections for this room/user_id
+        other_conns = [s for s, u in _sid_to_user.items() if u == user_id]
+        if other_conns:
+            print(f"[socket] Connection {sid} disconnected, but user {user_id} still has active connections: {other_conns}")
+            return
+
+        # No other active connections, schedule delayed cleanup (5s grace period)
+        async def delayed_cleanup(uid):
+            await asyncio.sleep(5.0)
+            active_conns = [s for s, u in _sid_to_user.items() if u == uid]
+            if not active_conns and uid in mira.sessions:
+                try:
+                    await mira.end_session(uid)
+                    print(f"[socket] Cleaned up session for {uid} after 5s grace period")
+                except Exception as e:
+                    print(f"[socket] Failed to clean up session for {uid} after grace period: {e}")
+            else:
+                print(f"[socket] Grace period cleanup skipped for {uid}: active connections found: {active_conns}")
+
+        asyncio.create_task(delayed_cleanup(user_id))
 
 
 def _is_valid_uuid(value: str) -> bool:

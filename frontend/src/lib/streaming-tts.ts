@@ -19,6 +19,7 @@ export class StreamingTTS {
   private apiUrl: string;
   private generation = 0;
   private speaking = false;
+  private isBrowserSpeaking = false;
   private audio: HTMLAudioElement | null = null;
   private mediaSource: MediaSource | null = null;
   private audioContext: AudioContext | null = null;
@@ -74,9 +75,8 @@ export class StreamingTTS {
 
       await this.playStream(resp.body, gen, onStart, onEnd);
     } catch (err) {
-      console.error("[StreamingTTS] Error:", err);
-      this.speaking = false;
-      onEnd?.();
+      console.warn("[StreamingTTS] ElevenLabs stream failed, falling back to browser SpeechSynthesis:", err);
+      this.playBrowserSpeech(text, gen, onStart, onEnd);
     }
   }
 
@@ -135,8 +135,22 @@ export class StreamingTTS {
 
         await this.playStream(resp.body, gen, entry.onStart, entry.onEnd);
       } catch (err) {
-        console.error("[StreamingTTS] Queue entry error:", err);
-        entry.onEnd?.();
+        console.warn("[StreamingTTS] ElevenLabs queue entry failed, falling back to browser SpeechSynthesis:", err);
+        if (this.generation === gen && this.queueGeneration === qGen) {
+          await new Promise<void>((resolve) => {
+            this.playBrowserSpeech(
+              entry.text,
+              gen,
+              entry.onStart,
+              () => {
+                entry.onEnd?.();
+                resolve();
+              }
+            );
+          });
+        } else {
+          entry.onEnd?.();
+        }
       }
     }
 
@@ -300,11 +314,73 @@ export class StreamingTTS {
     }
   }
 
+  private playBrowserSpeech(
+    text: string,
+    gen: number,
+    onStart?: () => void,
+    onEnd?: () => void,
+  ): void {
+    if (typeof window === "undefined" || !("speechSynthesis" in window)) {
+      this.speaking = false;
+      this.isBrowserSpeaking = false;
+      onEnd?.();
+      return;
+    }
+
+    // Cancel any ongoing browser speech
+    window.speechSynthesis.cancel();
+
+    this.isBrowserSpeaking = true;
+    const utterance = new SpeechSynthesisUtterance(text);
+    
+    // Attempt to find a nice female English voice (since Mira is a female stylist)
+    const voices = window.speechSynthesis.getVoices();
+    const voice = voices.find(
+      (v) =>
+        v.lang.startsWith("en") &&
+        (v.name.toLowerCase().includes("female") ||
+          v.name.toLowerCase().includes("google") ||
+          v.name.toLowerCase().includes("samantha") ||
+          v.name.toLowerCase().includes("tessa") ||
+          v.name.toLowerCase().includes("moira") ||
+          v.name.toLowerCase().includes("karen"))
+    );
+    if (voice) {
+      utterance.voice = voice;
+    }
+    
+    utterance.rate = 1.05;
+
+    utterance.onstart = () => {
+      if (this.generation !== gen) {
+        window.speechSynthesis.cancel();
+        this.isBrowserSpeaking = false;
+        return;
+      }
+      onStart?.();
+    };
+
+    const done = () => {
+      this.isBrowserSpeaking = false;
+      this.speaking = false;
+      onEnd?.();
+    };
+
+    utterance.onend = done;
+    utterance.onerror = done;
+
+    window.speechSynthesis.speak(utterance);
+  }
+
   /**
    * Get current output volume (0-1) for feeding to the Orb component.
    * Uses the same power-curve normalization as ElevenLabs SDK.
    */
   getOutputVolume(): number {
+    if (this.isBrowserSpeaking && this.speaking) {
+      // Simulate speech volume fluctuations (0.15 to 0.45)
+      return 0.15 + Math.random() * 0.3;
+    }
     if (!this.analyser || !this.frequencyData || !this.speaking) return 0;
 
     this.analyser.getByteFrequencyData(this.frequencyData);
@@ -326,6 +402,11 @@ export class StreamingTTS {
     this.queue = [];
     this.onQueueDrain = undefined;
     this.speaking = false;
+    this.isBrowserSpeaking = false;
+
+    if (typeof window !== "undefined" && "speechSynthesis" in window) {
+      window.speechSynthesis.cancel();
+    }
 
     if (this.audio) {
       this.audio.pause();

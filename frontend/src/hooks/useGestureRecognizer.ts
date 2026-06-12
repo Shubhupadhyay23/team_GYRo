@@ -143,7 +143,10 @@ export function useGestureRecognizer({
           }
         }
       } catch (err) {
-        console.error("[MirrorV2:Gesture] Recognition frame error:", err);
+        const errMsg = err instanceof Error ? err.message : String(err);
+        if (!errMsg.includes("XNNPACK")) {
+          console.error("[MirrorV2:Gesture] Recognition frame error:", err);
+        }
       }
 
       rafRef.current = requestAnimationFrame(processFrame);

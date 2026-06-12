@@ -4,6 +4,8 @@ import Link from "next/link";
 
 const SOCKET_URL = process.env.NEXT_PUBLIC_SOCKET_URL || "not configured";
 
+const SHOW_LAPTOP_MODE = true; // Set to false to remove/hide Laptop Mode anytime
+
 const routes = [
   {
     href: "/chat",
@@ -20,6 +22,15 @@ const routes = [
     label: "Phone Onboarding",
     description: "Google OAuth sign-in and queue flow",
   },
+  ...(SHOW_LAPTOP_MODE
+    ? [
+        {
+          href: "/laptop",
+          label: "Mirrorless Laptop Mode",
+          description: "Test all features standalone",
+        },
+      ]
+    : []),
 ];
 
 export default function Home() {

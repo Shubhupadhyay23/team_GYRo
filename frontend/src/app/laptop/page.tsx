@@ -2,7 +2,6 @@
 
 import { Suspense } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { QRCodeSVG } from "qrcode.react";
 import { useCamera } from "@/hooks/useCamera";
 import { useGestureRecognizer } from "@/hooks/useGestureRecognizer";
 import { usePoseDetection } from "@/hooks/usePoseDetection";
@@ -20,7 +19,7 @@ import VoiceIndicator from "@/components/mirror/VoiceIndicator";
 import PriceStrip, { type PriceStripItem } from "@/components/mirror/PriceStrip";
 import SessionRecap from "@/components/mirror/SessionRecap";
 import { socket } from "@/lib/socket";
-import { skipQueueUser, getSTTConfig } from "@/lib/api";
+import { getSTTConfig } from "@/lib/api";
 import type { DetectedGesture, GestureType } from "@/types/gestures";
 import type { PoseResult } from "@/types/pose";
 import type { ClothingItem } from "@/types/clothing";
@@ -28,33 +27,51 @@ import ProductCarousel, { type ProductCard } from "@/components/mirror/ProductCa
 import { LikedItemsTray, type LikedOutfitThumbnail } from "@/components/mirror/LikedItemsTray";
 import { processToolResult } from "@/lib/process-tool-result";
 
-type KioskState = "attract" | "waiting" | "session" | "recap";
+type LaptopState = "start" | "session" | "recap";
 
-interface ActiveUser {
-  id: string;
-  name: string;
-}
-
-const PHONE_URL = "https://mirrorless.vercel.app/phone";
 const WAITING_TIMEOUT_MS = 2 * 60 * 1000; // 2 minutes
 const HOLD_DURATION_MS = 2000;
 const CANVAS_WIDTH = 1920;
 const CANVAS_HEIGHT = 1080;
 
-export default function MirrorPageWrapper() {
+export default function LaptopPageWrapper() {
+  // Monkey-patch console.error to silence the benign WASM info logs 
+  // that Next.js aggressively catches and shows as error overlays.
+  useEffect(() => {
+    const originalError = console.error;
+    const originalInfo = console.info;
+    const originalWarn = console.warn;
+
+    const filterConsole = (original: any) => (...args: any[]) => {
+      const msg = args.join(" ");
+      if (typeof msg === "string" && msg.includes("TensorFlow Lite XNNPACK delegate")) {
+        return; // Ignore this completely
+      }
+      original(...args);
+    };
+
+    console.error = filterConsole(originalError);
+    console.info = filterConsole(originalInfo);
+    console.warn = filterConsole(originalWarn);
+
+    return () => {
+      console.error = originalError;
+      console.info = originalInfo;
+      console.warn = originalWarn;
+    };
+  }, []);
+
   return (
     <Suspense fallback={null}>
-      <MirrorPage />
+      <LaptopPage />
     </Suspense>
   );
 }
 
-function MirrorPage() {
-  // ── Kiosk state ──
-  const [kioskState, setKioskState] = useState<KioskState>("attract");
-  const [activeUser, setActiveUser] = useState<ActiveUser | null>(null);
-  const waitingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const pendingQueueRef = useRef<ActiveUser | null | undefined>(undefined);
+function LaptopPage() {
+  // ── Laptop state ──
+  const [kioskState, setKioskState] = useState<LaptopState>("start");
+  const [userId, setUserId] = useState<string | null>(null);
 
   // ── Camera (hidden, 1080p for better pose accuracy) ──
   const { videoRef, isReady: isCameraReady } = useCamera();
@@ -144,13 +161,10 @@ function MirrorPage() {
   // Track whether we just interrupted Mira (ignore stale mira_speech chunks)
   const interruptedRef = useRef(false);
 
-  // Current user ID for session
-  const userId = activeUser?.id ?? null;
-
-  // ── Log kiosk state transitions ──
+  // ── Log state transitions ──
   useEffect(() => {
-    console.log("[Mirror:State]", kioskState, activeUser ? `user=${activeUser.name}` : "");
-  }, [kioskState, activeUser]);
+    console.log("[Laptop:State]", kioskState, userId ? `user=${userId}` : "");
+  }, [kioskState, userId]);
 
   // ── Pose detection callback ──
   const handlePoseUpdate = useCallback((result: PoseResult) => {
@@ -213,50 +227,7 @@ function MirrorPage() {
     }
   }, [userId]);
 
-  // ── Queue events (drives attract <-> waiting) ──
-  useEffect(() => {
-    const handleQueueUpdated = (data: {
-      active_user: ActiveUser | null;
-      queue: Array<{ id: string; user_id: string; name: string; position: number; status: string }>;
-    }) => {
-      console.log("[Mirror] queue_updated:", data);
-      if (kioskState === "session") return;
-
-      if (kioskState === "recap") {
-        pendingQueueRef.current = data.active_user ?? null;
-        return;
-      }
-
-      if (data.active_user) {
-        setActiveUser(data.active_user);
-        setKioskState("waiting");
-      } else {
-        setActiveUser(null);
-        setKioskState("attract");
-      }
-    };
-
-    socket.on("queue_updated", handleQueueUpdated);
-    return () => {
-      socket.off("queue_updated", handleQueueUpdated);
-    };
-  }, [kioskState]);
-
-  // ── 2-minute timeout in waiting state ──
-  useEffect(() => {
-    if (kioskState === "waiting" && activeUser) {
-      waitingTimerRef.current = setTimeout(() => {
-        console.log("[Mirror] Waiting timeout — auto-skipping user");
-        skipQueueUser(activeUser.id).catch(() => {});
-      }, WAITING_TIMEOUT_MS);
-    }
-    return () => {
-      if (waitingTimerRef.current) {
-        clearTimeout(waitingTimerRef.current);
-        waitingTimerRef.current = null;
-      }
-    };
-  }, [kioskState, activeUser]);
+  // No queue events needed for laptop mode
 
   // ── Session active from backend ──
   useEffect(() => {
@@ -547,8 +518,8 @@ function MirrorPage() {
         setKioskState("recap");
       } else {
         mira.stopSession();
-        setActiveUser(null);
-        setKioskState("attract");
+        setUserId(null);
+        setKioskState("start");
       }
     };
 
@@ -872,21 +843,37 @@ function MirrorPage() {
   }, [canvasOutfits.length, userId]);
 
   // ── Start session handler ──
-  const handleStartSession = useCallback(() => {
-    if (!userId || isStarting || sessionActive) return;
+  const handleStartSession = useCallback(async () => {
+    if (isStarting || sessionActive) return;
 
     // Unlock browser audio policy while we still have the user gesture context
     const ctx = new AudioContext();
     ctx.resume().then(() => ctx.close());
 
     setIsStarting(true);
-    socket.emit("start_session", { user_id: userId });
-  }, [userId, isStarting, sessionActive]);
-
-  const handleSkipUser = useCallback(() => {
-    if (!activeUser) return;
-    skipQueueUser(activeUser.id).catch(() => {});
-  }, [activeUser]);
+    
+    try {
+      // 1. Fetch guest user ID from backend
+      const apiHost = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+      const resolvedApiUrl = typeof window !== "undefined" && apiHost.includes("localhost")
+        ? apiHost.replace("localhost", window.location.hostname)
+        : apiHost;
+      const res = await fetch(`${resolvedApiUrl}/laptop/guest`, {
+        method: "POST"
+      });
+      const data = await res.json();
+      if (!data.user_id) throw new Error("No user_id returned");
+      
+      const newUserId = data.user_id;
+      setUserId(newUserId);
+      
+      // 2. Tell backend to start session for this user
+      socket.emit("start_session", { user_id: newUserId });
+    } catch (e) {
+      console.error("[Laptop] Failed to start guest session:", e);
+      setIsStarting(false);
+    }
+  }, [isStarting, sessionActive]);
 
   const handleEndSession = useCallback(() => {
     if (!userId) return;
@@ -914,16 +901,8 @@ function MirrorPage() {
     mira.stopSession();
     setRecapData(null);
 
-    const pending = pendingQueueRef.current;
-    pendingQueueRef.current = undefined;
-
-    if (pending) {
-      setActiveUser(pending);
-      setKioskState("waiting");
-    } else {
-      setActiveUser(null);
-      setKioskState("attract");
-    }
+      setUserId(null);
+      setKioskState("start");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -937,7 +916,7 @@ function MirrorPage() {
         overflow: "hidden",
       }}
     >
-      {/* Hidden camera feed (1x1 pixel, invisible — only used for pose detection) */}
+      {/* Visible camera feed for Laptop Mode (mirrored) */}
       <video
         ref={videoRef}
         autoPlay
@@ -947,15 +926,16 @@ function MirrorPage() {
           position: "absolute",
           top: 0,
           left: 0,
-          width: 1,
-          height: 1,
-          opacity: 0,
-          pointerEvents: "none",
+          width: "100%",
+          height: "100%",
+          objectFit: "cover",
+          transform: "scaleX(-1)", // Mirror the video horizontally
+          zIndex: 1,
         }}
       />
 
-      {/* === ATTRACT STATE === */}
-      {kioskState === "attract" && (
+      {/* === START STATE === */}
+      {kioskState === "start" && (
         <div
           style={{
             position: "absolute",
@@ -977,89 +957,29 @@ function MirrorPage() {
               letterSpacing: "-0.02em",
             }}
           >
-            Mirrorless
+            Mirrorless Laptop Mode
           </h1>
           <p style={{ color: "rgba(255,255,255,0.6)", fontSize: "1.2rem", marginBottom: 40 }}>
-            Your AI stylist
+            Test all features standalone
           </p>
 
-          <div
+          <button
+            onClick={handleStartSession}
+            disabled={isStarting}
             style={{
-              background: "#fff",
-              borderRadius: 16,
-              padding: 20,
-              marginBottom: 24,
+              padding: "16px 48px",
+              fontSize: "1.2rem",
+              fontWeight: 600,
+              color: "#fff",
+              background: "rgba(100, 140, 255, 0.8)",
+              border: "none",
+              borderRadius: 12,
+              cursor: "pointer",
+              boxShadow: "0 4px 20px rgba(100, 140, 255, 0.4)",
             }}
           >
-            <QRCodeSVG
-              value={PHONE_URL}
-              size={180}
-              level="M"
-              includeMargin={false}
-            />
-          </div>
-
-          <p style={{ color: "rgba(255,255,255,0.4)", fontSize: "0.9rem" }}>
-            Scan the QR code with your phone
-          </p>
-        </div>
-      )}
-
-      {/* === WAITING STATE === */}
-      {kioskState === "waiting" && activeUser && (
-        <div
-          style={{
-            position: "absolute",
-            inset: 0,
-            zIndex: 20,
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            justifyContent: "center",
-            background: "#000",
-          }}
-        >
-          <p style={{ color: "rgba(255,255,255,0.5)", fontSize: "1rem", marginBottom: 8 }}>
-            Up next
-          </p>
-          <h2 style={{ color: "#fff", fontSize: "2.5rem", fontWeight: 700, marginBottom: 40 }}>
-            {activeUser.name}
-          </h2>
-          <div style={{ display: "flex", gap: 16 }}>
-            <button
-              onClick={handleStartSession}
-              disabled={isStarting}
-              style={{
-                padding: "16px 48px",
-                fontSize: "1.2rem",
-                fontWeight: 600,
-                color: "#fff",
-                background: "rgba(100, 140, 255, 0.8)",
-                border: "none",
-                borderRadius: 12,
-                cursor: "pointer",
-                boxShadow: "0 4px 20px rgba(100, 140, 255, 0.4)",
-              }}
-            >
-              {isStarting ? "Starting..." : "Start Session"}
-            </button>
-            <button
-              onClick={handleSkipUser}
-              style={{
-                padding: "16px 32px",
-                fontSize: "1.2rem",
-                fontWeight: 600,
-                color: "#fff",
-                background: "rgba(255, 255, 255, 0.15)",
-                border: "1px solid rgba(255,255,255,0.3)",
-                borderRadius: 12,
-                cursor: "pointer",
-              }}
-            >
-              Skip
-            </button>
-          </div>
-          <WaitingCountdown />
+            {isStarting ? "Starting..." : "Start Guest Session"}
+          </button>
         </div>
       )}
 
@@ -1115,6 +1035,7 @@ function MirrorPage() {
             zIndex: 5,
             transition: outfitAnimation === "none" ? "opacity 500ms ease" : undefined,
             opacity: outfitAnimation === "none" ? outfitOpacity : undefined,
+            transform: "scaleX(-1)", // Mirror to match the video feed
           }}
         >
           <ClothingCanvas
@@ -1128,7 +1049,7 @@ function MirrorPage() {
       )}
 
       {/* Debug overlay (z-6 normally, z-50 when active to render above attract/waiting overlays) */}
-      <div style={{ position: "absolute", inset: 0, zIndex: debugMode ? 50 : 6 }}>
+      <div style={{ position: "absolute", inset: 0, zIndex: debugMode ? 50 : 6, transform: "scaleX(-1)" }}>
         <DebugOverlay
           pose={currentPose}
           items={activeCanvasOutfit}
@@ -1280,62 +1201,6 @@ function MirrorPage() {
         </div>
       )}
 
-      {/* Persistent QR code (z-30, bottom-left corner, always visible) */}
-      <div
-        style={{
-          position: "absolute",
-          bottom: 24,
-          left: 24,
-          zIndex: 30,
-          background: "rgba(255, 255, 255, 0.95)",
-          borderRadius: 12,
-          padding: 12,
-          boxShadow: "0 4px 12px rgba(0, 0, 0, 0.3)",
-        }}
-      >
-        <QRCodeSVG
-          value={PHONE_URL}
-          size={100}
-          level="M"
-          includeMargin={false}
-        />
-        <p
-          style={{
-            margin: "8px 0 0 0",
-            fontSize: "0.7rem",
-            color: "#666",
-            textAlign: "center",
-            fontWeight: 500,
-          }}
-        >
-          Scan to join
-        </p>
-      </div>
     </main>
-  );
-}
-
-/* ---------- Waiting Countdown ---------- */
-
-function WaitingCountdown() {
-  const [remaining, setRemaining] = useState(120);
-
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setRemaining((s) => {
-        if (s <= 0) return 0;
-        return s - 1;
-      });
-    }, 1000);
-    return () => clearInterval(timer);
-  }, []);
-
-  const minutes = Math.floor(remaining / 60);
-  const seconds = remaining % 60;
-
-  return (
-    <p style={{ color: "rgba(255,255,255,0.3)", fontSize: "0.9rem", marginTop: 24 }}>
-      Auto-skip in {minutes}:{String(seconds).padStart(2, "0")}
-    </p>
   );
 }

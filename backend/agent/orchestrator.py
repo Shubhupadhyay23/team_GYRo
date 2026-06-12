@@ -14,8 +14,8 @@ from dataclasses import dataclass, field
 from typing import Dict, Optional
 from uuid import uuid4
 
-import groq
-from groq import AsyncGroq
+import openai
+from openai import AsyncOpenAI
 from dotenv import load_dotenv
 
 from agent.prompts import build_system_prompt, build_recommendation_prompt, get_mira_system_prompt
@@ -38,15 +38,15 @@ from services.user_data_service import (
 
 load_dotenv()
 
-SONNET_MODEL = "llama-3.3-70b-versatile"
-HAIKU_MODEL = "llama-3.1-8b-instant"
-SILENCE_TIMEOUT_SECONDS = 5
+SONNET_MODEL = "gemini-3.1-flash-lite"
+HAIKU_MODEL = "gemini-3.1-flash-lite"
+SILENCE_TIMEOUT_SECONDS = 15
 EVENT_BATCH_WINDOW_MS = 200
 SOFT_API_LIMIT = 20
 MAX_TOOL_RESULT_CHARS = 20_000  # ~5k tokens max per tool result in history
 
 # Initialize Anthropic client for recommendation pipeline
-groq_client = AsyncGroq(api_key=os.environ.get("GROQ_API_KEY", "missing_key"))
+openai_client = AsyncOpenAI(api_key=os.environ.get("GEMINI_API_KEY", "missing_key"), base_url="https://generativelanguage.googleapis.com/v1beta/openai/")
 
 
 @dataclass
@@ -78,9 +78,9 @@ class MiraOrchestrator:
     """Event-driven orchestrator for the Mira AI stylist agent."""
 
     def __init__(self, socket_io=None):
-        raw_key = os.environ.get("GROQ_API_KEY", "missing_key")
+        raw_key = os.environ.get("GEMINI_API_KEY", "missing_key")
         clean_key = raw_key.strip().split("\n")[0].strip()
-        self.client = AsyncGroq(api_key=clean_key)
+        self.client = AsyncOpenAI(api_key=clean_key, base_url="https://generativelanguage.googleapis.com/v1beta/openai/")
         self.sio = socket_io
         self.sessions: dict[str, SessionState] = {}
         self._silence_tasks: dict[str, asyncio.Task] = {}
@@ -503,8 +503,33 @@ class MiraOrchestrator:
     def _strip_data_urls_in_string(s: str) -> str:
         return s
 
+    def _get_local_fallback_response(self, session: SessionState, user_message: str) -> tuple[str, str | None]:
+        msg = user_message.lower()
+        if any(w in msg for w in ["photo", "camera", "check", "look", "wear", "outfit", "see"]):
+            return (
+                "Let's get a look at you first! Hold still while I take a quick photo of your outfit.",
+                "take_photo"
+            )
+        if any(w in msg for w in ["recommend", "suggest", "idea", "wear", "clothes", "style", "upgrade"]):
+            return (
+                "I've got some awesome streetwear pieces in mind for you. Let me pull up some recommendations!",
+                "give_recommendation"
+            )
+        if any(w in msg for w in ["buy", "link", "price", "cost", "store", "where"]):
+            return (
+                "I've listed the pricing and links for these pieces on the screen. Take a look!",
+                None
+            )
+        fallbacks = [
+            "I'm just reviewing your style profile. Tell me, are we upgrading your daily casual look or styling for a night out?",
+            "Let's keep building your outfit. Tell me what brands or colors you usually feel most comfortable in!",
+            "I'm thinking of the perfect streetwear upgrade for you. While I get that ready, what do you think of Stüssy or Carhartt?",
+        ]
+        idx = len(session.conversation_history) % len(fallbacks)
+        return (fallbacks[idx], None)
+
     async def _call_llm(self, session: SessionState, tool_depth: int = 0) -> None:
-        """Make a streaming Groq API call with tool use."""
+        """Make a streaming Gemini API call with tool use."""
         if session.wrapping_up:
             return
 
@@ -513,23 +538,38 @@ class MiraOrchestrator:
             return
 
         session.api_calls += 1
-        model, max_tokens = self._select_model(session)
-        print(f"[mira] Using {model} (max_tokens={max_tokens}) for {session.user_id}")
-
+        model_default, max_tokens = self._select_model(session)
         api_messages = self._prepare_messages(session)
 
         collected_text = ""
         tool_calls_dict = {}
         interrupted = False
+        stream = None
+
+        models_to_try = [model_default, "gemini-2.5-flash", "gemini-1.5-flash"]
+        base_delay = 1.0
 
         try:
-            stream = await self.client.chat.completions.create(
-                model=model,
-                max_tokens=max_tokens,
-                messages=api_messages,
-                tools=TOOL_DEFINITIONS,
-                stream=True
-            )
+            # Try model rotation fallback
+            for attempt, current_model in enumerate(models_to_try, 1):
+                try:
+                    print(f"[mira] Attempting LLM call using model {current_model} (attempt {attempt}/{len(models_to_try)}) for {session.user_id}")
+                    stream = await self.client.chat.completions.create(
+                        model=current_model,
+                        max_tokens=max_tokens,
+                        messages=api_messages,
+                        tools=TOOL_DEFINITIONS,
+                        stream=True
+                    )
+                    break
+                except Exception as e:
+                    error_str = str(e)
+                    print(f"[mira] API call failed with model {current_model} on attempt {attempt}/{len(models_to_try)}: {error_str}")
+                    if attempt == len(models_to_try):
+                        raise
+                    delay = base_delay * (2 ** (attempt - 1))
+                    print(f"[mira] Retrying with next model in {delay:.1f}s...")
+                    await asyncio.sleep(delay)
 
             stream_buffer = ""
             in_tag = False
@@ -608,7 +648,7 @@ class MiraOrchestrator:
 
                 if delta.tool_calls:
                     for tc in delta.tool_calls:
-                        idx = tc.index
+                        idx = tc.index if tc.index is not None else 0
                         if idx not in tool_calls_dict:
                             tool_calls_dict[idx] = {
                                 "id": tc.id,
@@ -617,6 +657,14 @@ class MiraOrchestrator:
                             }
                         if tc.function.arguments:
                             tool_calls_dict[idx]["function"]["arguments"] += tc.function.arguments
+                        extra_content = None
+                        if hasattr(tc, "extra_content") and tc.extra_content:
+                            extra_content = tc.extra_content
+                        elif hasattr(tc, "model_extra") and tc.model_extra and "extra_content" in tc.model_extra:
+                            extra_content = tc.model_extra["extra_content"]
+                        
+                        if extra_content:
+                            tool_calls_dict[idx]["extra_content"] = extra_content
 
             if interrupted:
                 # Flush buffer if interrupted
@@ -647,17 +695,41 @@ class MiraOrchestrator:
 
         except Exception as e:
             error_msg = str(e)
-            print(f"[mira] Groq API call failed for {session.user_id}: {error_msg}")
+            print(f"[mira] Gemini API call failed for {session.user_id}: {error_msg}")
             if self.sio:
-                await self.sio.emit("session_error", {"error": error_msg}, room=session.user_id)
+                await self.sio.emit("session_error", {"error": f"API Error (Self-Healed): {error_msg}"}, room=session.user_id)
+            
+            # Extract last user message to understand context
+            user_msg_text = ""
             if session.conversation_history and session.conversation_history[-1]["role"] == "user":
-                session.conversation_history.pop()
-            if session.conversation_history and session.conversation_history[-1].get("role") == "assistant":
-                if "tool_calls" in session.conversation_history[-1]:
-                    session.conversation_history.pop()
-            fallback = "Hmm, my brain glitched for a second. What were we talking about?"
-            await self._stream_text(session.user_id, fallback)
+                user_msg = session.conversation_history[-1]
+                if isinstance(user_msg.get("content"), str):
+                    user_msg_text = user_msg["content"]
+                elif isinstance(user_msg.get("content"), list):
+                    for block in user_msg["content"]:
+                        if isinstance(block, dict) and block.get("type") == "text":
+                            user_msg_text = block.get("text", "")
+            
+            # Generate context-aware witty fallback text and target tool
+            fallback_text, tool_to_trigger = self._get_local_fallback_response(session, user_msg_text)
+            
+            assistant_msg = {"role": "assistant", "content": fallback_text}
+            if tool_to_trigger:
+                assistant_msg["tool_calls"] = [{
+                    "id": f"call_fallback_{int(time.time())}",
+                    "type": "function",
+                    "function": {"name": tool_to_trigger, "arguments": "{}"}
+                }]
+            
+            session.conversation_history.append(assistant_msg)
+            
+            # Stream local fallback response to frontend so avatar speaks it
+            await self._stream_text(session.user_id, fallback_text)
             await self._stream_text(session.user_id, "", end_of_message=True)
+            
+            # Proactively trigger the tool if requested
+            if tool_to_trigger:
+                await self._handle_tool_calls(session, assistant_msg["tool_calls"], tool_depth)
             return
 
         tool_uses = list(tool_calls_dict.values())
@@ -761,10 +833,10 @@ class MiraOrchestrator:
 
         session._photo_taken = True
         
-        print("[mira] Sending photo to Groq Vision model...")
+        print("[mira] Sending photo to Gemini Vision model...")
         try:
             vision_response = await self.client.chat.completions.create(
-                model="llama-3.2-90b-vision-preview",
+                model="gemini-3.1-flash-lite",
                 messages=[
                     {
                         "role": "user",
@@ -794,6 +866,10 @@ class MiraOrchestrator:
         if not session:
             return None
 
+        # Guard against concurrent/re-entrant calls to end_session
+        if not session.is_active:
+            print(f"[mira] end_session: session for {user_id} is already ending, ignoring duplicate call")
+            return None
         session.is_active = False
         self._cancel_silence_timer(user_id)
 
@@ -842,7 +918,7 @@ class MiraOrchestrator:
                 room=user_id,
             )
 
-        del self.sessions[user_id]
+        self.sessions.pop(user_id, None)
         return {"summary": summary, "liked_items": session.liked_items}
 
     async def _advance_queue(self, user_id: str) -> None:
@@ -1164,11 +1240,10 @@ async def generate_outfit_recommendations(
                 print(f"[Mira] Flat lay generation failed (non-fatal): {e}")
             return {}
 
-        # Run Groq + flat lays in parallel
-        groq_response, flat_lay_map = await asyncio.gather(
-            groq_client.chat.completions.create(
-                model=HAIKU_MODEL,
-                max_tokens=6144,
+        # Run Gemini + flat lays in parallel
+        gemini_response, flat_lay_map = await asyncio.gather(
+            openai_client.chat.completions.create(
+                model="gemini-3.1-flash-lite",
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt}
@@ -1178,10 +1253,10 @@ async def generate_outfit_recommendations(
             _pregenerate_flat_lays(),
         )
 
-        # Extract JSON from Groq response
-        recommendations = None
-        if groq_response.choices and groq_response.choices[0].message.content:
-            recommendations = _extract_json_from_text(groq_response.choices[0].message.content)
+        # Extract JSON from Gemini response
+        recommendations = {"outfits": []}
+        if gemini_response.choices and gemini_response.choices[0].message.content:
+            recommendations = _extract_json_from_text(gemini_response.choices[0].message.content)
 
         if not recommendations:
             return create_error_response("api_error", user_data["user"]["name"])

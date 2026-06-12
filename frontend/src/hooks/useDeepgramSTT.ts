@@ -41,6 +41,7 @@ export interface UseDeepgramSTTReturn {
   interimTranscript: string;
   startListening: () => void;
   stopListening: () => void;
+  resetTranscript: () => void;
 }
 
 export function useDeepgramSTT(config?: DeepgramSTTConfig): UseDeepgramSTTReturn {
@@ -55,11 +56,81 @@ export function useDeepgramSTT(config?: DeepgramSTTConfig): UseDeepgramSTTReturn
   const reconnectCountRef = useRef(0);
   // Track whether a close was intentional (config change) vs unexpected
   const intentionalCloseRef = useRef(false);
+  const recognitionRef = useRef<any>(null);
 
   const activeConfig = config ?? DEFAULT_CONFIG;
   // Store config in a ref so connectWebSocket always sees the latest values
   const configRef = useRef(activeConfig);
   configRef.current = activeConfig;
+
+  const startFallbackSpeechRecognition = useCallback(() => {
+    if (recognitionRef.current) return;
+
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      console.error("[DeepgramSTT] Neither Deepgram nor browser SpeechRecognition is available.");
+      return;
+    }
+
+    console.log("[DeepgramSTT] Initializing browser-native SpeechRecognition fallback...");
+    const recognition = new SpeechRecognition();
+    recognitionRef.current = recognition;
+
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = "en-US";
+
+    recognition.onstart = () => {
+      console.log("[DeepgramSTT] Native SpeechRecognition started");
+      setIsListening(true);
+    };
+
+    recognition.onresult = (event: any) => {
+      let finalTranscript = "";
+      let interimTranscript = "";
+
+      for (let i = event.resultIndex; i < event.results.length; ++i) {
+        if (event.results[i].isFinal) {
+          finalTranscript += event.results[i][0].transcript;
+        } else {
+          interimTranscript += event.results[i][0].transcript;
+        }
+      }
+
+      if (finalTranscript) {
+        console.log("[DeepgramSTT] Native Final transcript:", finalTranscript);
+        setTranscript(finalTranscript);
+      }
+      setInterimTranscript(interimTranscript);
+    };
+
+    recognition.onerror = (event: any) => {
+      console.error("[DeepgramSTT] Native SpeechRecognition error:", event.error);
+      if (event.error === "not-allowed") {
+        setIsListening(false);
+      }
+    };
+
+    recognition.onend = () => {
+      console.log("[DeepgramSTT] Native SpeechRecognition ended");
+      if (recognitionRef.current === recognition) {
+        try {
+          recognition.start();
+        } catch {
+          setIsListening(false);
+        }
+      } else {
+        setIsListening(false);
+      }
+    };
+
+    try {
+      recognition.start();
+    } catch (err) {
+      console.error("[DeepgramSTT] Failed to start Native SpeechRecognition:", err);
+      setIsListening(false);
+    }
+  }, []);
 
   const cleanup = useCallback(() => {
     if (resumeIntervalRef.current) {
@@ -76,6 +147,13 @@ export function useDeepgramSTT(config?: DeepgramSTTConfig): UseDeepgramSTTReturn
       wsRef.current.close();
     }
     wsRef.current = null;
+    if (recognitionRef.current) {
+      const rec = recognitionRef.current;
+      recognitionRef.current = null;
+      try {
+        rec.stop();
+      } catch {}
+    }
     reconnectCountRef.current = 0;
     setIsListening(false);
     setInterimTranscript("");
@@ -84,7 +162,11 @@ export function useDeepgramSTT(config?: DeepgramSTTConfig): UseDeepgramSTTReturn
   const connectWebSocket = useCallback(
     (stream: MediaStream) => {
       if (!DEEPGRAM_API_KEY) {
-        console.warn("[DeepgramSTT] No API key configured");
+        console.warn("[DeepgramSTT] No API key configured, falling back to browser-native STT");
+        if (stream) {
+          stream.getTracks().forEach((t) => t.stop());
+        }
+        startFallbackSpeechRecognition();
         return;
       }
 
@@ -191,8 +273,12 @@ export function useDeepgramSTT(config?: DeepgramSTTConfig): UseDeepgramSTTReturn
             }
           }, delay);
         } else if (reconnectCountRef.current >= MAX_RECONNECTS) {
-          console.error("[MirrorV2:STT] Max reconnects reached, STT offline");
-          setIsListening(false);
+          console.error("[MirrorV2:STT] Max reconnects reached, falling back to browser-native STT");
+          if (streamRef.current) {
+            streamRef.current.getTracks().forEach((t) => t.stop());
+            streamRef.current = null;
+          }
+          startFallbackSpeechRecognition();
         } else {
           setIsListening(false);
         }
@@ -241,5 +327,9 @@ export function useDeepgramSTT(config?: DeepgramSTTConfig): UseDeepgramSTTReturn
     cleanup();
   }, [cleanup]);
 
-  return { isListening, transcript, interimTranscript, startListening, stopListening };
+  const resetTranscript = useCallback(() => {
+    setTranscript("");
+  }, []);
+
+  return { isListening, transcript, interimTranscript, startListening, stopListening, resetTranscript };
 }

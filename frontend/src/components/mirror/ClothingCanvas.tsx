@@ -24,6 +24,39 @@ const CATEGORY_Z_ORDER = {
   tops: 1,
 };
 
+const MOCK_MANNEQUIN_POSE: PoseResult = {
+  timestamp: Date.now(),
+  landmarks: Array.from({ length: 33 }, (_, idx) => {
+    let x = 0.5;
+    let y = 0.5;
+    const visibility = 0.99;
+
+    if (idx === 11) { // LEFT_SHOULDER
+      x = 0.43; y = 0.35;
+    } else if (idx === 12) { // RIGHT_SHOULDER
+      x = 0.57; y = 0.35;
+    } else if (idx === 13) { // LEFT_ELBOW
+      x = 0.38; y = 0.50;
+    } else if (idx === 14) { // RIGHT_ELBOW
+      x = 0.62; y = 0.50;
+    } else if (idx === 23) { // LEFT_HIP
+      x = 0.45; y = 0.62;
+    } else if (idx === 24) { // RIGHT_HIP
+      x = 0.55; y = 0.62;
+    } else if (idx === 25) { // LEFT_KNEE
+      x = 0.45; y = 0.78;
+    } else if (idx === 26) { // RIGHT_KNEE
+      x = 0.55; y = 0.78;
+    } else if (idx === 27) { // LEFT_ANKLE
+      x = 0.45; y = 0.95;
+    } else if (idx === 28) { // RIGHT_ANKLE
+      x = 0.55; y = 0.95;
+    }
+
+    return { x, y, z: 0, visibility };
+  })
+};
+
 interface ImageBounds {
   x: number;
   y: number;
@@ -211,12 +244,9 @@ export function ClothingCanvas({
       return;
     }
 
-    // Use current pose or freeze at last known position
-    const poseToRender = pose || lastPoseRef.current;
-    if (!poseToRender) {
-      ctx.clearRect(0, 0, width, height);
-      return;
-    }
+    // Use current pose, freeze at last known position, or fallback to mock mannequin pose
+    const isMannequin = !pose && !lastPoseRef.current;
+    const poseToRender = pose || lastPoseRef.current || MOCK_MANNEQUIN_POSE;
 
     // Update last known pose
     if (pose) {
@@ -224,6 +254,66 @@ export function ClothingCanvas({
     }
 
     ctx.clearRect(0, 0, width, height);
+
+    if (isMannequin) {
+      // Draw mannequin wireframe/silhouette
+      ctx.save();
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.18)";
+      ctx.lineWidth = 3;
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+
+      // Draw head
+      ctx.beginPath();
+      ctx.arc(width * 0.5, height * 0.23, width * 0.04, 0, 2 * Math.PI);
+      ctx.stroke();
+
+      // Draw neck and shoulders
+      ctx.beginPath();
+      ctx.moveTo(width * 0.5, height * 0.27);
+      ctx.lineTo(width * 0.5, height * 0.31);
+      ctx.moveTo(width * 0.43, height * 0.35);
+      ctx.lineTo(width * 0.57, height * 0.35);
+      ctx.stroke();
+
+      // Draw torso (shoulders to hips)
+      ctx.beginPath();
+      ctx.moveTo(width * 0.43, height * 0.35);
+      ctx.lineTo(width * 0.45, height * 0.62);
+      ctx.lineTo(width * 0.55, height * 0.62);
+      ctx.lineTo(width * 0.57, height * 0.35);
+      ctx.closePath();
+      ctx.fillStyle = "rgba(255, 255, 255, 0.04)";
+      ctx.fill();
+      ctx.stroke();
+
+      // Draw legs
+      ctx.beginPath();
+      ctx.moveTo(width * 0.45, height * 0.62);
+      ctx.lineTo(width * 0.45, height * 0.78);
+      ctx.lineTo(width * 0.45, height * 0.95);
+      ctx.moveTo(width * 0.55, height * 0.62);
+      ctx.lineTo(width * 0.55, height * 0.78);
+      ctx.lineTo(width * 0.55, height * 0.95);
+      ctx.stroke();
+
+      // Draw stand/pole
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.12)";
+      ctx.beginPath();
+      ctx.moveTo(width * 0.5, height * 0.62);
+      ctx.lineTo(width * 0.5, height * 0.98);
+      ctx.moveTo(width * 0.45, height * 0.98);
+      ctx.lineTo(width * 0.55, height * 0.98);
+      ctx.stroke();
+
+      // Add a status text indicator
+      ctx.fillStyle = "rgba(255, 255, 255, 0.5)";
+      ctx.font = "14px Inter, sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText("VIRTUAL FIT Fallback", width * 0.5, height * 0.13);
+
+      ctx.restore();
+    }
 
     // Sort items by z-order (bottoms first, then tops)
     const sortedItems = [...items].sort((a, b) => {

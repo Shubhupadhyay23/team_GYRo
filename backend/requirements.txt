@@ -20,4 +20,4 @@ onnxruntime>=1.24.1
 fastmcp==2.14.5
 phonenumbers==8.13.53
 passlib[bcrypt]>=1.7.4
-groq>=0.5.0
+openai>=1.0.0

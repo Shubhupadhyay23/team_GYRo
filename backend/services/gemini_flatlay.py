@@ -45,7 +45,16 @@ def _get_api_key() -> Optional[str]:
 
 
 async def _download_image(url: str) -> Optional[bytes]:
-    """Download image from URL, return bytes or None on failure."""
+    """Download image from URL or decode data URL, return bytes or None on failure."""
+    if url.startswith("data:image"):
+        try:
+            # Extract base64 part
+            header, encoded = url.split(",", 1)
+            return base64.b64decode(encoded)
+        except Exception as e:
+            print(f"[Gemini] Data URL decode FAILED — {type(e).__name__}: {e}")
+            return None
+
     try:
         async with httpx.AsyncClient(timeout=15, follow_redirects=True) as client:
             response = await client.get(url)

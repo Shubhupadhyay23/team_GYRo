@@ -80,35 +80,50 @@ async def stream_speech(body: SpeakRequest):
     if not api_key:
         raise HTTPException(status_code=500, detail="ELEVENLABS_API_KEY not configured")
 
+    client = httpx.AsyncClient(timeout=30.0)
+    try:
+        req = client.build_request(
+            "POST",
+            f"{ELEVENLABS_API_URL}/text-to-speech/{voice_id}/stream?optimize_streaming_latency=3",
+            headers={
+                "Accept": "audio/mpeg",
+                "Content-Type": "application/json",
+                "xi-api-key": api_key,
+            },
+            json={
+                "text": body.text,
+                "model_id": "eleven_turbo_v2_5",
+                "voice_settings": {
+                    "stability": 0.5,
+                    "similarity_boost": 0.8,
+                    "style": 0.5,
+                    "use_speaker_boost": True,
+                },
+                "speed": 1.2,
+            }
+        )
+        resp = await client.send(req, stream=True)
+    except Exception as e:
+        await client.aclose()
+        raise HTTPException(status_code=502, detail=f"Failed to connect to ElevenLabs: {e}")
+
+    if resp.status_code != 200:
+        await resp.aread()
+        err_msg = resp.text
+        await resp.aclose()
+        await client.aclose()
+        print(f"[tts] ElevenLabs streaming failed with {resp.status_code}: {err_msg}")
+        raise HTTPException(
+            status_code=502,
+            detail=f"ElevenLabs stream error ({resp.status_code}): {err_msg[:200]}"
+        )
+
     async def audio_generator():
-        async with httpx.AsyncClient() as client:
-            async with client.stream(
-                "POST",
-                f"{ELEVENLABS_API_URL}/text-to-speech/{voice_id}/stream?optimize_streaming_latency=3",
-                headers={
-                    "Accept": "audio/mpeg",
-                    "Content-Type": "application/json",
-                    "xi-api-key": api_key,
-                },
-                json={
-                    "text": body.text,
-                    "model_id": "eleven_turbo_v2_5",
-                    "voice_settings": {
-                        "stability": 0.5,
-                        "similarity_boost": 0.8,
-                        "style": 0.5,
-                        "use_speaker_boost": True,
-                    },
-                    "speed": 1.2,
-                },
-                timeout=30.0,
-            ) as resp:
-                if resp.status_code != 200:
-                    raise HTTPException(
-                        status_code=502,
-                        detail=f"ElevenLabs stream error ({resp.status_code})",
-                    )
-                async for chunk in resp.aiter_bytes(1024):
-                    yield chunk
+        try:
+            async for chunk in resp.aiter_bytes(1024):
+                yield chunk
+        finally:
+            await resp.aclose()
+            await client.aclose()
 
     return StreamingResponse(audio_generator(), media_type="audio/mpeg")
