@@ -596,7 +596,7 @@ function LaptopPage() {
     pendingTranscriptRef.current = null;
     stt.resetTranscript();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stt.transcript, userId]);
+  }, [stt.transcript, userId, mira.isSpeaking]);
 
   // ── Snapshot handler ──
   useEffect(() => {
