@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { StreamingTTS } from "@/lib/streaming-tts";
 import type { AgentState } from "@/components/ui/orb";
+import { getResolvedApiUrl } from "@/lib/api";
 
 export type OrbState = "idle" | "listening" | "thinking" | "speaking";
 export type MiraEmotion = "idle" | "neutral" | "proud" | "teasing";
@@ -43,7 +44,6 @@ export interface UseOrbAvatarReturn {
   stopSession: () => void;
 }
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 export function useOrbAvatar(): UseOrbAvatarReturn {
   const [orbState, setOrbStateInternal] = useState<OrbState>("idle");
@@ -123,7 +123,8 @@ export function useOrbAvatar(): UseOrbAvatarReturn {
 
   const startSession = useCallback(() => {
     if (ttsRef.current) return;
-    const tts = new StreamingTTS(API_URL);
+    const resolvedUrl = getResolvedApiUrl();
+    const tts = new StreamingTTS(resolvedUrl);
     ttsRef.current = tts;
     startVolumeLoop();
     console.log("[OrbAvatar] Session started");

@@ -1,4 +1,5 @@
 import type { ClothingItem } from "@/types/clothing";
+import { getResolvedApiUrl } from "@/lib/api";
 
 export interface DisplayProductItem {
   product_id?: string;
@@ -16,7 +17,7 @@ export interface DisplayProductItem {
  */
 export function mapToClothingItems(items: DisplayProductItem[]): ClothingItem[] {
   const catMap: Record<string, "tops" | "bottoms"> = { top: "tops", bottom: "bottoms" };
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+  const apiUrl = getResolvedApiUrl();
 
   // Log each item's readiness for canvas overlay
   for (const item of items) {

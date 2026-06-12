@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { StreamingTTS } from "@/lib/streaming-tts";
 import type { MiraEmotion, MiraAvatarState } from "@/components/ui/mira-video-avatar";
+import { getResolvedApiUrl } from "@/lib/api";
 
 export type { MiraEmotion, MiraAvatarState };
 
@@ -23,7 +24,6 @@ export interface UseMiraVideoAvatarReturn {
   setOrbState: (state: "idle" | "listening" | "thinking" | "speaking") => void;
 }
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 /**
  * Hook to manage Mira video avatar state and TTS playback.
@@ -161,9 +161,10 @@ export function useMiraVideoAvatar(): UseMiraVideoAvatarReturn {
   const startSession = useCallback(() => {
     if (ttsRef.current) return;
     try {
-      const tts = new StreamingTTS(API_URL);
+      const resolvedUrl = getResolvedApiUrl();
+      const tts = new StreamingTTS(resolvedUrl);
       ttsRef.current = tts;
-      console.log("[MirrorV2:TTS] StreamingTTS initialized");
+      console.log("[MirrorV2:TTS] StreamingTTS initialized with URL:", resolvedUrl);
     } catch (err) {
       console.error("[MirrorV2:TTS] Init failed:", err instanceof Error ? err.message : err);
     }

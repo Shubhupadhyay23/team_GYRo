@@ -1,17 +1,21 @@
 import type { OnboardingData, RecommendationResponse } from "./types";
 
-const RAW_API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-const RAW_API_BASE = process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:8000";
-
-function resolveUrl(url: string) {
-  if (typeof window !== "undefined" && url.includes("localhost")) {
-    return url.replace("localhost", window.location.hostname);
+export function getResolvedApiUrl(): string {
+  const apiHost = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+  let resolvedApiUrl = apiHost;
+  if (typeof window !== "undefined") {
+    const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL;
+    if (window.location.protocol === "https:" && socketUrl && (socketUrl.startsWith("https:") || socketUrl.startsWith("wss:"))) {
+      resolvedApiUrl = socketUrl.replace(/^wss:/, "https:");
+    } else if (apiHost.includes("localhost")) {
+      resolvedApiUrl = apiHost.replace("localhost", window.location.hostname);
+    }
   }
-  return url;
+  return resolvedApiUrl.replace(/\/$/, "");
 }
 
-const API_URL = resolveUrl(RAW_API_URL);
-const API_BASE = resolveUrl(RAW_API_BASE);
+const API_URL = getResolvedApiUrl();
+const API_BASE = getResolvedApiUrl();
 
 /** Request helper for the Python backend (absolute URL). */
 async function request<T>(path: string, options?: RequestInit): Promise<T> {

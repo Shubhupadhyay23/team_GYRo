@@ -2,6 +2,7 @@ import type { ClothingItem } from "@/types/clothing";
 import type { PriceStripItem } from "@/components/mirror/PriceStrip";
 import type { ProductCard } from "@/components/mirror/ProductCarousel";
 import { mapToClothingItems } from "@/lib/map-clothing-items";
+import { getResolvedApiUrl } from "@/lib/api";
 
 export interface ToolResultData {
   type?: string;
@@ -80,7 +81,7 @@ export function processToolResult(data: ToolResultData): ProcessedToolResult | n
 function mapItemsToCards(
   items: NonNullable<ToolResultData["items"]>,
 ): ProductCard[] {
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+  const apiUrl = getResolvedApiUrl();
   return items
     .filter((it) => it.image_url)
     .map((it) => {
