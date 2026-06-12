@@ -855,9 +855,16 @@ function LaptopPage() {
     try {
       // 1. Fetch guest user ID from backend
       const apiHost = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-      const resolvedApiUrl = typeof window !== "undefined" && apiHost.includes("localhost")
-        ? apiHost.replace("localhost", window.location.hostname)
-        : apiHost;
+      let resolvedApiUrl = apiHost;
+      if (typeof window !== "undefined") {
+        const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL;
+        if (window.location.protocol === "https:" && socketUrl && socketUrl.startsWith("https:")) {
+          resolvedApiUrl = socketUrl;
+        } else if (apiHost.includes("localhost")) {
+          resolvedApiUrl = apiHost.replace("localhost", window.location.hostname);
+        }
+      }
+      resolvedApiUrl = resolvedApiUrl.replace(/\/$/, "");
       const res = await fetch(`${resolvedApiUrl}/laptop/guest`, {
         method: "POST"
       });
