@@ -71,6 +71,24 @@ function LaptopPage() {
   const [kioskState, setKioskState] = useState<LaptopState>("start");
   const [userId, setUserId] = useState<string | null>(null);
 
+  // ── Responsive Avatar Size ──
+  const [avatarSize, setAvatarSize] = useState(180);
+  useEffect(() => {
+    const updateSize = () => {
+      const width = window.innerWidth;
+      if (width < 640) {
+        setAvatarSize(100);
+      } else if (width < 1024) {
+        setAvatarSize(140);
+      } else {
+        setAvatarSize(180);
+      }
+    };
+    updateSize();
+    window.addEventListener('resize', updateSize);
+    return () => window.removeEventListener('resize', updateSize);
+  }, []);
+
   // ── Camera (hidden, 1080p for better pose accuracy) ──
   const { videoRef, isReady: isCameraReady } = useCamera();
 
@@ -952,20 +970,22 @@ function LaptopPage() {
             alignItems: "center",
             justifyContent: "center",
             background: "#000",
+            padding: 24,
+            textAlign: "center",
           }}
         >
           <h1
             style={{
               color: "#fff",
-              fontSize: "3rem",
+              fontSize: "clamp(2rem, 6vw, 3.5rem)",
               fontWeight: 700,
-              marginBottom: 8,
+              marginBottom: 12,
               letterSpacing: "-0.02em",
             }}
           >
             Mirrorless Laptop Mode
           </h1>
-          <p style={{ color: "rgba(255,255,255,0.6)", fontSize: "1.2rem", marginBottom: 40 }}>
+          <p style={{ color: "rgba(255,255,255,0.6)", fontSize: "clamp(1rem, 2.5vw, 1.2rem)", marginBottom: 40 }}>
             Test all features standalone
           </p>
 
@@ -973,8 +993,8 @@ function LaptopPage() {
             onClick={handleStartSession}
             disabled={isStarting}
             style={{
-              padding: "16px 48px",
-              fontSize: "1.2rem",
+              padding: "14px clamp(24px, 5vw, 48px)",
+              fontSize: "clamp(1rem, 2vw, 1.2rem)",
               fontWeight: 600,
               color: "#fff",
               background: "rgba(100, 140, 255, 0.8)",
@@ -1007,13 +1027,13 @@ function LaptopPage() {
             <MiraVideoAvatar
               emotion="idle"
               state="idle"
-              size={200}
+              size={avatarSize * 1.1}
             />
           </div>
           <p
             style={{
               color: "rgba(255,255,255,0.7)",
-              fontSize: "1.3rem",
+              fontSize: "clamp(1.1rem, 3vw, 1.4rem)",
               fontWeight: 500,
               animation: "pulse 2s ease-in-out infinite",
             }}
@@ -1047,8 +1067,7 @@ function LaptopPage() {
           <ClothingCanvas
             pose={currentPose}
             items={activeCanvasOutfit}
-            width={CANVAS_WIDTH}
-            height={CANVAS_HEIGHT}
+            videoRef={videoRef}
             onFitStatus={handleFitStatus}
           />
         </div>
@@ -1059,8 +1078,7 @@ function LaptopPage() {
         <DebugOverlay
           pose={currentPose}
           items={activeCanvasOutfit}
-          width={CANVAS_WIDTH}
-          height={CANVAS_HEIGHT}
+          videoRef={videoRef}
           visible={debugMode}
         />
       </div>
@@ -1070,15 +1088,15 @@ function LaptopPage() {
         <div
           style={{
             position: "absolute",
-            top: 24,
-            left: "12%",
+            top: "clamp(16px, 4vw, 24px)",
+            left: "clamp(16px, 6vw, 12%)",
             zIndex: 10,
           }}
         >
           <MiraVideoAvatar
             emotion={mira.emotion}
             state={mira.avatarState}
-            size={180}
+            size={avatarSize}
           />
         </div>
       )}
@@ -1089,8 +1107,8 @@ function LaptopPage() {
           onClick={handleEndSession}
           style={{
             position: "absolute",
-            top: 24,
-            right: "12%",
+            top: "clamp(16px, 4vw, 24px)",
+            right: "clamp(16px, 6vw, 12%)",
             zIndex: 10,
             padding: "8px 16px",
             fontSize: "0.85rem",

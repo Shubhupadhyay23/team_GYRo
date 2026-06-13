@@ -53,6 +53,24 @@ function MirrorPage() {
   // ── Kiosk state ──
   const [kioskState, setKioskState] = useState<KioskState>("attract");
   const [activeUser, setActiveUser] = useState<ActiveUser | null>(null);
+
+  // ── Responsive Avatar Size ──
+  const [avatarSize, setAvatarSize] = useState(180);
+  useEffect(() => {
+    const updateSize = () => {
+      const width = window.innerWidth;
+      if (width < 640) {
+        setAvatarSize(100);
+      } else if (width < 1024) {
+        setAvatarSize(140);
+      } else {
+        setAvatarSize(180);
+      }
+    };
+    updateSize();
+    window.addEventListener('resize', updateSize);
+    return () => window.removeEventListener('resize', updateSize);
+  }, []);
   const waitingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingQueueRef = useRef<ActiveUser | null | undefined>(undefined);
 
@@ -988,15 +1006,15 @@ function MirrorPage() {
           <h1
             style={{
               color: "#fff",
-              fontSize: "3rem",
+              fontSize: "clamp(2rem, 6vw, 3.5rem)",
               fontWeight: 700,
-              marginBottom: 8,
+              marginBottom: 12,
               letterSpacing: "-0.02em",
             }}
           >
             Mirrorless
           </h1>
-          <p style={{ color: "rgba(255,255,255,0.6)", fontSize: "1.2rem", marginBottom: 40 }}>
+          <p style={{ color: "rgba(255,255,255,0.6)", fontSize: "clamp(1.05rem, 2.5vw, 1.25rem)", marginBottom: 40 }}>
             Your AI stylist
           </p>
 
@@ -1039,7 +1057,7 @@ function MirrorPage() {
           <p style={{ color: "rgba(255,255,255,0.5)", fontSize: "1rem", marginBottom: 8 }}>
             Up next
           </p>
-          <h2 style={{ color: "#fff", fontSize: "2.5rem", fontWeight: 700, marginBottom: 40 }}>
+          <h2 style={{ color: "#fff", fontSize: "clamp(1.8rem, 5vw, 2.5rem)", fontWeight: 700, marginBottom: 40 }}>
             {activeUser.name}
           </h2>
           <div style={{ display: "flex", gap: 16 }}>
@@ -1047,8 +1065,8 @@ function MirrorPage() {
               onClick={handleStartSession}
               disabled={isStarting}
               style={{
-                padding: "16px 48px",
-                fontSize: "1.2rem",
+                padding: "14px clamp(24px, 5vw, 48px)",
+                fontSize: "clamp(1rem, 2vw, 1.2rem)",
                 fontWeight: 600,
                 color: "#fff",
                 background: "rgba(100, 140, 255, 0.8)",
@@ -1063,8 +1081,8 @@ function MirrorPage() {
             <button
               onClick={handleSkipUser}
               style={{
-                padding: "16px 32px",
-                fontSize: "1.2rem",
+                padding: "14px clamp(16px, 4vw, 32px)",
+                fontSize: "clamp(1rem, 2vw, 1.2rem)",
                 fontWeight: 600,
                 color: "#fff",
                 background: "rgba(255, 255, 255, 0.15)",
@@ -1098,13 +1116,13 @@ function MirrorPage() {
             <MiraVideoAvatar
               emotion="idle"
               state="idle"
-              size={200}
+              size={avatarSize * 1.1}
             />
           </div>
           <p
             style={{
               color: "rgba(255,255,255,0.7)",
-              fontSize: "1.3rem",
+              fontSize: "clamp(1.1rem, 3vw, 1.4rem)",
               fontWeight: 500,
               animation: "pulse 2s ease-in-out infinite",
             }}
@@ -1137,8 +1155,7 @@ function MirrorPage() {
           <ClothingCanvas
             pose={currentPose}
             items={activeCanvasOutfit}
-            width={CANVAS_WIDTH}
-            height={CANVAS_HEIGHT}
+            videoRef={videoRef}
             onFitStatus={handleFitStatus}
           />
         </div>
@@ -1149,8 +1166,7 @@ function MirrorPage() {
         <DebugOverlay
           pose={currentPose}
           items={activeCanvasOutfit}
-          width={CANVAS_WIDTH}
-          height={CANVAS_HEIGHT}
+          videoRef={videoRef}
           visible={debugMode}
         />
       </div>
@@ -1160,15 +1176,15 @@ function MirrorPage() {
         <div
           style={{
             position: "absolute",
-            top: 24,
-            left: "12%",
+            top: "clamp(16px, 4vw, 24px)",
+            left: "clamp(16px, 6vw, 12%)",
             zIndex: 10,
           }}
         >
           <MiraVideoAvatar
             emotion={mira.emotion}
             state={mira.avatarState}
-            size={180}
+            size={avatarSize}
           />
         </div>
       )}
@@ -1179,8 +1195,8 @@ function MirrorPage() {
           onClick={handleEndSession}
           style={{
             position: "absolute",
-            top: 24,
-            right: "12%",
+            top: "clamp(16px, 4vw, 24px)",
+            right: "clamp(16px, 6vw, 12%)",
             zIndex: 10,
             padding: "8px 16px",
             fontSize: "0.85rem",

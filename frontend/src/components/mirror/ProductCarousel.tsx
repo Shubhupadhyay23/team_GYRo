@@ -109,15 +109,22 @@ export default function ProductCarousel({
         height: "22vh",
         display: "flex",
         alignItems: "center",
-        justifyContent: "center",
+        justifyContent: "safe center",
         gap: 12,
         padding: "0 24px",
         background:
           "linear-gradient(to top, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0.4) 70%, transparent 100%)",
         zIndex: 10,
-        overflow: "hidden",
+        overflowX: "auto",
+        scrollbarWidth: "none",
+        WebkitOverflowScrolling: "touch",
       }}
     >
+      <style>{`
+        [data-testid="product-carousel"]::-webkit-scrollbar {
+          display: none;
+        }
+      `}</style>
       {items.map((item, idx) => {
         const isCurrent = idx === activeIndex;
         const isPast = idx < activeIndex;

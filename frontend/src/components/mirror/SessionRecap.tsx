@@ -58,10 +58,11 @@ export default function SessionRecap({
       <h1
         style={{
           color: "#fff",
-          fontSize: "2.5rem",
+          fontSize: "clamp(1.8rem, 5vw, 2.5rem)",
           fontWeight: 700,
-          marginBottom: 8,
+          marginBottom: "clamp(4px, 1vw, 8px)",
           letterSpacing: "-0.02em",
+          textAlign: "center",
         }}
       >
         Session Complete
@@ -69,8 +70,9 @@ export default function SessionRecap({
       <p
         style={{
           color: "rgba(255, 255, 255, 0.6)",
-          fontSize: "1.2rem",
-          marginBottom: 32,
+          fontSize: "clamp(1rem, 2vw, 1.2rem)",
+          marginBottom: "clamp(16px, 4vw, 32px)",
+          textAlign: "center",
         }}
       >
         {userName ? `Great session, ${userName}!` : "Great session!"}
@@ -81,11 +83,12 @@ export default function SessionRecap({
         <p
           style={{
             color: "rgba(255, 255, 255, 0.8)",
-            fontSize: "1.1rem",
+            fontSize: "clamp(0.95rem, 2.2vw, 1.1rem)",
             maxWidth: 600,
             textAlign: "center",
             lineHeight: 1.6,
-            marginBottom: 40,
+            marginBottom: "clamp(20px, 5vw, 40px)",
+            padding: "0 24px",
           }}
         >
           {summary}
@@ -94,14 +97,14 @@ export default function SessionRecap({
 
       {/* Liked items grid */}
       {likedItems.length > 0 && (
-        <div style={{ marginBottom: 40, textAlign: "center" }}>
+        <div style={{ marginBottom: "clamp(20px, 5vw, 40px)", textAlign: "center", width: "100%", padding: "0 24px" }}>
           <p
             style={{
               color: "rgba(255, 255, 255, 0.5)",
               fontSize: "0.85rem",
               textTransform: "uppercase",
               letterSpacing: "0.1em",
-              marginBottom: 16,
+              marginBottom: 12,
             }}
           >
             Your Favorites
@@ -109,7 +112,7 @@ export default function SessionRecap({
           <div
             style={{
               display: "flex",
-              gap: 16,
+              gap: "clamp(8px, 2vw, 16px)",
               justifyContent: "center",
               flexWrap: "wrap",
             }}
@@ -118,7 +121,7 @@ export default function SessionRecap({
               <div
                 key={i}
                 style={{
-                  width: 140,
+                  width: "clamp(100px, 28vw, 140px)",
                   background: "rgba(255, 255, 255, 0.08)",
                   borderRadius: 12,
                   overflow: "hidden",
@@ -131,7 +134,7 @@ export default function SessionRecap({
                     alt={item.title}
                     style={{
                       width: "100%",
-                      height: 140,
+                      height: "clamp(100px, 28vw, 140px)",
                       objectFit: "cover",
                     }}
                   />
@@ -172,12 +175,12 @@ export default function SessionRecap({
         <div
           style={{
             display: "flex",
-            gap: 48,
-            marginBottom: 40,
+            gap: "clamp(24px, 8vw, 48px)",
+            marginBottom: "clamp(20px, 5vw, 40px)",
           }}
         >
           <div style={{ textAlign: "center" }}>
-            <p style={{ color: "#fff", fontSize: "2rem", fontWeight: 700 }}>
+            <p style={{ color: "#fff", fontSize: "clamp(1.5rem, 5vw, 2rem)", fontWeight: 700 }}>
               {stats.items_shown}
             </p>
             <p
@@ -192,7 +195,7 @@ export default function SessionRecap({
             </p>
           </div>
           <div style={{ textAlign: "center" }}>
-            <p style={{ color: "#fff", fontSize: "2rem", fontWeight: 700 }}>
+            <p style={{ color: "#fff", fontSize: "clamp(1.5rem, 5vw, 2rem)", fontWeight: 700 }}>
               {stats.likes}
             </p>
             <p
@@ -211,14 +214,14 @@ export default function SessionRecap({
 
       {/* Poke QR code */}
       {POKE_RECIPE_URL && (
-        <div style={{ textAlign: "center", marginBottom: 24 }}>
+        <div style={{ textAlign: "center", marginBottom: "clamp(12px, 3vw, 24px)" }}>
           <p
             style={{
               color: "rgba(255, 255, 255, 0.5)",
               fontSize: "0.85rem",
               textTransform: "uppercase",
               letterSpacing: "0.1em",
-              marginBottom: 12,
+              marginBottom: 10,
             }}
           >
             Continue on Poke
@@ -227,13 +230,13 @@ export default function SessionRecap({
             style={{
               background: "#fff",
               borderRadius: 12,
-              padding: 12,
+              padding: 10,
               display: "inline-block",
             }}
           >
             <QRCodeSVG
               value={POKE_RECIPE_URL}
-              size={120}
+              size={100}
               level="M"
               includeMargin={false}
             />
@@ -242,7 +245,7 @@ export default function SessionRecap({
             style={{
               color: "rgba(255, 255, 255, 0.35)",
               fontSize: "0.75rem",
-              marginTop: 8,
+              marginTop: 6,
             }}
           >
             Scan to keep shopping with your AI stylist

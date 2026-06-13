@@ -278,8 +278,7 @@ export default function MirrorTestPage() {
           <ClothingCanvas
             pose={currentPose}
             items={currentOutfit}
-            width={CANVAS_WIDTH}
-            height={CANVAS_HEIGHT}
+            videoRef={videoRef}
             onImageError={handleImageError}
           />
 
@@ -287,8 +286,7 @@ export default function MirrorTestPage() {
           <DebugOverlay
             pose={currentPose}
             items={currentOutfit}
-            width={CANVAS_WIDTH}
-            height={CANVAS_HEIGHT}
+            videoRef={videoRef}
             visible={debugMode}
           />
         </div>

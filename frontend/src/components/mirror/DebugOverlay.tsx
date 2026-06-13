@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useEffect } from 'react';
+import { useRef, useEffect, useState } from 'react';
 import type { PoseResult } from '@/types/pose';
 import { POSE_LANDMARKS } from '@/types/pose';
 import type { ClothingItem } from '@/types/clothing';
@@ -9,8 +9,7 @@ import { landmarkToPixel, calculateClothingTransform } from '@/lib/clothing-tran
 interface DebugOverlayProps {
   pose: PoseResult | null;
   items: ClothingItem[];
-  width: number;
-  height: number;
+  videoRef?: React.RefObject<HTMLVideoElement | null>;
   visible: boolean;
 }
 
@@ -61,8 +60,43 @@ const ANCHOR_POINTS = {
   ],
 };
 
-export function DebugOverlay({ pose, items, width, height, visible }: DebugOverlayProps) {
+export function DebugOverlay({ pose, items, videoRef, visible }: DebugOverlayProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  // Dynamic canvas sizing state
+  const [dimensions, setDimensions] = useState({ width: 1920, height: 1080 });
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || !visible) return;
+
+    const updateSize = () => {
+      const parent = canvas.parentElement;
+      const w = parent ? parent.clientWidth : window.innerWidth;
+      const h = parent ? parent.clientHeight : window.innerHeight;
+      setDimensions({ width: w, height: h });
+    };
+
+    updateSize();
+
+    const resizeObserver = new ResizeObserver(() => {
+      updateSize();
+    });
+
+    const parent = canvas.parentElement;
+    if (parent) {
+      resizeObserver.observe(parent);
+    } else {
+      resizeObserver.observe(canvas);
+    }
+
+    window.addEventListener('resize', updateSize);
+
+    return () => {
+      resizeObserver.disconnect();
+      window.removeEventListener('resize', updateSize);
+    };
+  }, [visible]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -70,6 +104,11 @@ export function DebugOverlay({ pose, items, width, height, visible }: DebugOverl
 
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
+
+    const { width, height } = dimensions;
+    const video = videoRef?.current;
+    const videoWidth = video?.videoWidth || 0;
+    const videoHeight = video?.videoHeight || 0;
 
     // Clear canvas
     ctx.clearRect(0, 0, width, height);
@@ -87,8 +126,8 @@ export function DebugOverlay({ pose, items, width, height, visible }: DebugOverl
       if (!start || !end) continue;
       if (start.visibility < 0.5 || end.visibility < 0.5) continue;
 
-      const startPx = landmarkToPixel(start, width, height);
-      const endPx = landmarkToPixel(end, width, height);
+      const startPx = landmarkToPixel(start, width, height, videoWidth, videoHeight);
+      const endPx = landmarkToPixel(end, width, height, videoWidth, videoHeight);
 
       ctx.beginPath();
       ctx.moveTo(startPx.x, startPx.y);
@@ -102,7 +141,7 @@ export function DebugOverlay({ pose, items, width, height, visible }: DebugOverl
     for (const landmark of landmarks) {
       if (landmark.visibility < 0.5) continue;
 
-      const px = landmarkToPixel(landmark, width, height);
+      const px = landmarkToPixel(landmark, width, height, videoWidth, videoHeight);
 
       ctx.beginPath();
       ctx.arc(px.x, px.y, 5, 0, Math.PI * 2);
@@ -120,7 +159,7 @@ export function DebugOverlay({ pose, items, width, height, visible }: DebugOverl
         const landmark = landmarks[idx];
         if (!landmark || landmark.visibility < 0.5) continue;
 
-        const px = landmarkToPixel(landmark, width, height);
+        const px = landmarkToPixel(landmark, width, height, videoWidth, videoHeight);
 
         ctx.beginPath();
         ctx.arc(px.x, px.y, 8, 0, Math.PI * 2);
@@ -137,7 +176,9 @@ export function DebugOverlay({ pose, items, width, height, visible }: DebugOverl
         landmarks,
         item.category,
         width,
-        height
+        height,
+        videoWidth,
+        videoHeight
       );
 
       if (!transform) continue;
@@ -155,15 +196,15 @@ export function DebugOverlay({ pose, items, width, height, visible }: DebugOverl
 
       ctx.restore();
     }
-  }, [pose, items, width, height, visible]);
+  }, [pose, items, dimensions, videoRef, visible]);
 
   if (!visible) return null;
 
   return (
     <canvas
       ref={canvasRef}
-      width={width}
-      height={height}
+      width={dimensions.width}
+      height={dimensions.height}
       style={{
         position: 'absolute',
         top: 0,

@@ -12,8 +12,7 @@ export type FitMethod = 'precise' | 'fallback';
 interface ClothingCanvasProps {
   pose: PoseResult | null;
   items: ClothingItem[];
-  width: number;
-  height: number;
+  videoRef?: React.RefObject<HTMLVideoElement | null>;
   opacity?: number;
   onImageError?: (itemId: string, error: string) => void;
   onFitStatus?: (statuses: Map<string, FitMethod>) => void;
@@ -115,8 +114,7 @@ function detectImageBounds(img: HTMLImageElement): ImageBounds {
 export function ClothingCanvas({
   pose,
   items,
-  width,
-  height,
+  videoRef,
   opacity = 1.0,
   onImageError,
   onFitStatus,
@@ -129,6 +127,41 @@ export function ClothingCanvas({
   const fitStatusRef = useRef<Map<string, FitMethod>>(new Map());
   const [loadedImages, setLoadedImages] = useState<Set<string>>(new Set());
   const lastPoseRef = useRef<PoseResult | null>(null);
+
+  // Dynamic canvas sizing state
+  const [dimensions, setDimensions] = useState({ width: 1920, height: 1080 });
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const updateSize = () => {
+      const parent = canvas.parentElement;
+      const w = parent ? parent.clientWidth : window.innerWidth;
+      const h = parent ? parent.clientHeight : window.innerHeight;
+      setDimensions({ width: w, height: h });
+    };
+
+    updateSize();
+
+    const resizeObserver = new ResizeObserver(() => {
+      updateSize();
+    });
+
+    const parent = canvas.parentElement;
+    if (parent) {
+      resizeObserver.observe(parent);
+    } else {
+      resizeObserver.observe(canvas);
+    }
+
+    window.addEventListener('resize', updateSize);
+
+    return () => {
+      resizeObserver.disconnect();
+      window.removeEventListener('resize', updateSize);
+    };
+  }, []);
 
   // Preload images when items change
   useEffect(() => {
@@ -251,6 +284,11 @@ export function ClothingCanvas({
       return;
     }
 
+    const { width, height } = dimensions;
+    const video = videoRef?.current;
+    const videoWidth = video?.videoWidth || 0;
+    const videoHeight = video?.videoHeight || 0;
+
     // Use current pose, freeze at last known position, or fallback to mock mannequin pose
     const isMannequin = !pose && !lastPoseRef.current;
     const poseToRender = pose || lastPoseRef.current || MOCK_MANNEQUIN_POSE;
@@ -338,7 +376,10 @@ export function ClothingCanvas({
         poseToRender.landmarks,
         item.category,
         width,
-        height
+        height,
+        undefined,
+        videoWidth,
+        videoHeight
       );
 
       if (!quad) continue;
@@ -554,7 +595,7 @@ export function ClothingCanvas({
         ctx.restore();
       }
     }
-  }, [pose, items, width, height, loadedImages, opacity]);
+  }, [pose, items, dimensions, videoRef, loadedImages, opacity]);
 
   // Re-render when dependencies change
   useEffect(() => {
@@ -564,8 +605,8 @@ export function ClothingCanvas({
   return (
     <canvas
       ref={canvasRef}
-      width={width}
-      height={height}
+      width={dimensions.width}
+      height={dimensions.height}
       style={{
         position: 'absolute',
         top: 0,

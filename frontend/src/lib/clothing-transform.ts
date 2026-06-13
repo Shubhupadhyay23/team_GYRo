@@ -17,12 +17,42 @@ interface PixelCoord {
 export function landmarkToPixel(
   landmark: PoseLandmark,
   canvasWidth: number,
-  canvasHeight: number
+  canvasHeight: number,
+  videoWidth?: number,
+  videoHeight?: number
 ): PixelCoord {
-  return {
-    x: landmark.x * canvasWidth,
-    y: landmark.y * canvasHeight,
-  };
+  if (!videoWidth || !videoHeight) {
+    return {
+      x: landmark.x * canvasWidth,
+      y: landmark.y * canvasHeight,
+    };
+  }
+
+  const videoRatio = videoWidth / videoHeight;
+  const canvasRatio = canvasWidth / canvasHeight;
+
+  let x = landmark.x;
+  let y = landmark.y;
+
+  if (videoRatio > canvasRatio) {
+    // Video is wider than canvas -> cropped on left and right
+    const scale = canvasHeight / videoHeight;
+    const renderedWidth = videoWidth * scale;
+    const offsetX = (renderedWidth - canvasWidth) / 2;
+    return {
+      x: landmark.x * renderedWidth - offsetX,
+      y: landmark.y * canvasHeight,
+    };
+  } else {
+    // Video is taller than canvas -> cropped on top and bottom
+    const scale = canvasWidth / videoWidth;
+    const renderedHeight = videoHeight * scale;
+    const offsetY = (renderedHeight - canvasHeight) / 2;
+    return {
+      x: landmark.x * canvasWidth,
+      y: landmark.y * renderedHeight - offsetY,
+    };
+  }
 }
 
 /**
@@ -77,7 +107,9 @@ export function areLandmarksVisible(
 function calculateTopTransform(
   landmarks: PoseLandmark[],
   canvasWidth: number,
-  canvasHeight: number
+  canvasHeight: number,
+  videoWidth?: number,
+  videoHeight?: number
 ): ClothingTransform | null {
   // Check visibility of all required landmarks
   if (!areLandmarksVisible(landmarks, 'tops')) {
@@ -91,10 +123,10 @@ function calculateTopTransform(
   const rHip = landmarks[POSE_LANDMARKS.RIGHT_HIP];
 
   // Convert to pixels
-  const tlPx = landmarkToPixel(lShoulder, canvasWidth, canvasHeight);
-  const trPx = landmarkToPixel(rShoulder, canvasWidth, canvasHeight);
-  const blPx = landmarkToPixel(lHip, canvasWidth, canvasHeight);
-  const brPx = landmarkToPixel(rHip, canvasWidth, canvasHeight);
+  const tlPx = landmarkToPixel(lShoulder, canvasWidth, canvasHeight, videoWidth, videoHeight);
+  const trPx = landmarkToPixel(rShoulder, canvasWidth, canvasHeight, videoWidth, videoHeight);
+  const blPx = landmarkToPixel(lHip, canvasWidth, canvasHeight, videoWidth, videoHeight);
+  const brPx = landmarkToPixel(rHip, canvasWidth, canvasHeight, videoWidth, videoHeight);
 
   // Calculate center point
   const centerX = (tlPx.x + trPx.x + blPx.x + brPx.x) / 4;
@@ -128,7 +160,9 @@ function calculateTopTransform(
 function calculateBottomTransform(
   landmarks: PoseLandmark[],
   canvasWidth: number,
-  canvasHeight: number
+  canvasHeight: number,
+  videoWidth?: number,
+  videoHeight?: number
 ): ClothingTransform | null {
   // Check visibility
   if (!areLandmarksVisible(landmarks, 'bottoms')) {
@@ -142,10 +176,10 @@ function calculateBottomTransform(
   const rAnkle = landmarks[POSE_LANDMARKS.RIGHT_ANKLE];
 
   // Convert to pixels
-  const tlPx = landmarkToPixel(lHip, canvasWidth, canvasHeight);
-  const trPx = landmarkToPixel(rHip, canvasWidth, canvasHeight);
-  const blPx = landmarkToPixel(lAnkle, canvasWidth, canvasHeight);
-  const brPx = landmarkToPixel(rAnkle, canvasWidth, canvasHeight);
+  const tlPx = landmarkToPixel(lHip, canvasWidth, canvasHeight, videoWidth, videoHeight);
+  const trPx = landmarkToPixel(rHip, canvasWidth, canvasHeight, videoWidth, videoHeight);
+  const blPx = landmarkToPixel(lAnkle, canvasWidth, canvasHeight, videoWidth, videoHeight);
+  const brPx = landmarkToPixel(rAnkle, canvasWidth, canvasHeight, videoWidth, videoHeight);
 
   // Calculate center
   const centerX = (tlPx.x + trPx.x + blPx.x + brPx.x) / 4;
@@ -178,13 +212,15 @@ export function calculateClothingTransform(
   landmarks: PoseLandmark[],
   category: ClothingCategory,
   canvasWidth: number,
-  canvasHeight: number
+  canvasHeight: number,
+  videoWidth?: number,
+  videoHeight?: number
 ): ClothingTransform | null {
   switch (category) {
     case 'tops':
-      return calculateTopTransform(landmarks, canvasWidth, canvasHeight);
+      return calculateTopTransform(landmarks, canvasWidth, canvasHeight, videoWidth, videoHeight);
     case 'bottoms':
-      return calculateBottomTransform(landmarks, canvasWidth, canvasHeight);
+      return calculateBottomTransform(landmarks, canvasWidth, canvasHeight, videoWidth, videoHeight);
   }
 }
 
@@ -225,7 +261,9 @@ export function getClothingQuad(
   category: ClothingCategory,
   canvasWidth: number,
   canvasHeight: number,
-  anchorPoints?: ClothingAnchorPoints
+  anchorPoints?: ClothingAnchorPoints,
+  videoWidth?: number,
+  videoHeight?: number
 ): ClothingQuad | null {
   // Check visibility
   if (!areLandmarksVisible(landmarks, category)) {
@@ -235,7 +273,7 @@ export function getClothingQuad(
   // If anchor points provided and valid, use them for direct mapping
   if (anchorPoints && anchorPoints.leftShoulder && anchorPoints.rightShoulder) {
     console.log('Using detected anchor points for precise alignment');
-    return mapAnchorsToBody(landmarks, category, anchorPoints, canvasWidth, canvasHeight);
+    return mapAnchorsToBody(landmarks, category, anchorPoints, canvasWidth, canvasHeight, videoWidth, videoHeight);
   }
 
   // Fallback to landmark-based quad (original behavior)
@@ -246,10 +284,10 @@ export function getClothingQuad(
     const rHip = landmarks[POSE_LANDMARKS.RIGHT_HIP];
 
     return {
-      topLeft: landmarkToPixel(lShoulder, canvasWidth, canvasHeight),
-      topRight: landmarkToPixel(rShoulder, canvasWidth, canvasHeight),
-      bottomLeft: landmarkToPixel(lHip, canvasWidth, canvasHeight),
-      bottomRight: landmarkToPixel(rHip, canvasWidth, canvasHeight),
+      topLeft: landmarkToPixel(lShoulder, canvasWidth, canvasHeight, videoWidth, videoHeight),
+      topRight: landmarkToPixel(rShoulder, canvasWidth, canvasHeight, videoWidth, videoHeight),
+      bottomLeft: landmarkToPixel(lHip, canvasWidth, canvasHeight, videoWidth, videoHeight),
+      bottomRight: landmarkToPixel(rHip, canvasWidth, canvasHeight, videoWidth, videoHeight),
     };
   } else {
     // bottoms
@@ -259,10 +297,10 @@ export function getClothingQuad(
     const rAnkle = landmarks[POSE_LANDMARKS.RIGHT_ANKLE];
 
     return {
-      topLeft: landmarkToPixel(lHip, canvasWidth, canvasHeight),
-      topRight: landmarkToPixel(rHip, canvasWidth, canvasHeight),
-      bottomLeft: landmarkToPixel(lAnkle, canvasWidth, canvasHeight),
-      bottomRight: landmarkToPixel(rAnkle, canvasWidth, canvasHeight),
+      topLeft: landmarkToPixel(lHip, canvasWidth, canvasHeight, videoWidth, videoHeight),
+      topRight: landmarkToPixel(rHip, canvasWidth, canvasHeight, videoWidth, videoHeight),
+      bottomLeft: landmarkToPixel(lAnkle, canvasWidth, canvasHeight, videoWidth, videoHeight),
+      bottomRight: landmarkToPixel(rAnkle, canvasWidth, canvasHeight, videoWidth, videoHeight),
     };
   }
 }
@@ -276,7 +314,9 @@ function mapAnchorsToBody(
   category: ClothingCategory,
   anchors: ClothingAnchorPoints,
   canvasWidth: number,
-  canvasHeight: number
+  canvasHeight: number,
+  videoWidth?: number,
+  videoHeight?: number
 ): ClothingQuad {
   if (category === 'tops') {
     // Direct mapping: clothing shoulders -> body shoulders
@@ -286,10 +326,10 @@ function mapAnchorsToBody(
     const rHipLandmark = landmarks[POSE_LANDMARKS.RIGHT_HIP];
 
     // Convert body landmarks to pixels
-    const bodyTopLeft = landmarkToPixel(lShoulderLandmark, canvasWidth, canvasHeight);
-    const bodyTopRight = landmarkToPixel(rShoulderLandmark, canvasWidth, canvasHeight);
-    const bodyBottomLeft = landmarkToPixel(lHipLandmark, canvasWidth, canvasHeight);
-    const bodyBottomRight = landmarkToPixel(rHipLandmark, canvasWidth, canvasHeight);
+    const bodyTopLeft = landmarkToPixel(lShoulderLandmark, canvasWidth, canvasHeight, videoWidth, videoHeight);
+    const bodyTopRight = landmarkToPixel(rShoulderLandmark, canvasWidth, canvasHeight, videoWidth, videoHeight);
+    const bodyBottomLeft = landmarkToPixel(lHipLandmark, canvasWidth, canvasHeight, videoWidth, videoHeight);
+    const bodyBottomRight = landmarkToPixel(rHipLandmark, canvasWidth, canvasHeight, videoWidth, videoHeight);
 
     return {
       topLeft: bodyTopLeft,
@@ -305,10 +345,10 @@ function mapAnchorsToBody(
     const rAnkleLandmark = landmarks[POSE_LANDMARKS.RIGHT_ANKLE];
 
     return {
-      topLeft: landmarkToPixel(lHipLandmark, canvasWidth, canvasHeight),
-      topRight: landmarkToPixel(rHipLandmark, canvasWidth, canvasHeight),
-      bottomLeft: landmarkToPixel(lAnkleLandmark, canvasWidth, canvasHeight),
-      bottomRight: landmarkToPixel(rAnkleLandmark, canvasWidth, canvasHeight),
+      topLeft: landmarkToPixel(lHipLandmark, canvasWidth, canvasHeight, videoWidth, videoHeight),
+      topRight: landmarkToPixel(rHipLandmark, canvasWidth, canvasHeight, videoWidth, videoHeight),
+      bottomLeft: landmarkToPixel(lAnkleLandmark, canvasWidth, canvasHeight, videoWidth, videoHeight),
+      bottomRight: landmarkToPixel(rAnkleLandmark, canvasWidth, canvasHeight, videoWidth, videoHeight),
     };
   }
 }
