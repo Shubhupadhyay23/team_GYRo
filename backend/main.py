@@ -195,12 +195,12 @@ async def test_recommend(body: dict):
     style_notes = body.get("style_notes", "casual")
 
     serper_key = os.getenv("SERPER_API_KEY")
-    gemini_key = os.getenv("GEMINI_API_KEY")
+    gemini_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
 
     if not serper_key:
         raise HTTPException(status_code=500, detail="SERPER_API_KEY not configured")
     if not gemini_key:
-        raise HTTPException(status_code=500, detail="GEMINI_API_KEY not configured")
+        raise HTTPException(status_code=500, detail="GEMINI_API_KEY or GOOGLE_API_KEY not configured")
 
     # Step 1: Serper search for tops + bottoms
     print(f"[test/recommend] Searching for {brands} ({gender}, {style_notes})")

@@ -45,8 +45,13 @@ EVENT_BATCH_WINDOW_MS = 200
 SOFT_API_LIMIT = 20
 MAX_TOOL_RESULT_CHARS = 20_000  # ~5k tokens max per tool result in history
 
+def _resolve_gemini_key() -> str:
+    """Resolve the Gemini API key from GEMINI_API_KEY or GOOGLE_API_KEY (Render compat)."""
+    raw = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY") or "missing_key"
+    return raw.strip().split("\n")[0].strip()
+
 # Initialize Anthropic client for recommendation pipeline
-openai_client = AsyncOpenAI(api_key=os.environ.get("GEMINI_API_KEY", "missing_key"), base_url="https://generativelanguage.googleapis.com/v1beta/openai/")
+openai_client = AsyncOpenAI(api_key=_resolve_gemini_key(), base_url="https://generativelanguage.googleapis.com/v1beta/openai/")
 
 
 @dataclass
@@ -78,9 +83,7 @@ class MiraOrchestrator:
     """Event-driven orchestrator for the Mira AI stylist agent."""
 
     def __init__(self, socket_io=None):
-        raw_key = os.environ.get("GEMINI_API_KEY", "missing_key")
-        clean_key = raw_key.strip().split("\n")[0].strip()
-        self.client = AsyncOpenAI(api_key=clean_key, base_url="https://generativelanguage.googleapis.com/v1beta/openai/")
+        self.client = AsyncOpenAI(api_key=_resolve_gemini_key(), base_url="https://generativelanguage.googleapis.com/v1beta/openai/")
         self.sio = socket_io
         self.sessions: dict[str, SessionState] = {}
         self._silence_tasks: dict[str, asyncio.Task] = {}
