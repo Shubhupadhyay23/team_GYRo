@@ -840,7 +840,7 @@ function LaptopPage() {
     
     try {
       // 1. Fetch guest user ID from backend
-      const apiHost = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+      const apiHost = process.env.NEXT_PUBLIC_API_URL || "https://mirrorless-backend-udpk.onrender.com";
       let resolvedApiUrl = apiHost;
       if (typeof window !== "undefined") {
         const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL;

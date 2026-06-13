@@ -1,6 +1,6 @@
 import { io } from "socket.io-client";
 
-const RAW_SOCKET_URL = process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:8000";
+const RAW_SOCKET_URL = process.env.NEXT_PUBLIC_SOCKET_URL || "https://mirrorless-backend-udpk.onrender.com";
 
 function resolveUrl(url: string) {
   if (typeof window !== "undefined") {

@@ -1,7 +1,7 @@
 import type { OnboardingData, RecommendationResponse } from "./types";
 
 export function getResolvedApiUrl(): string {
-  const apiHost = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+  const apiHost = process.env.NEXT_PUBLIC_API_URL || "https://mirrorless-backend-udpk.onrender.com";
   let resolvedApiUrl = apiHost;
   if (typeof window !== "undefined") {
     const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL;
