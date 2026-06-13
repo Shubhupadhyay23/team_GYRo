@@ -6,6 +6,119 @@ const MIN_VISIBILITY = 0.5;
 const PADDING_FACTOR = 1.5; // 50% padding around clothing for better coverage
 const SIZE_MULTIPLIER = 1.3; // Additional scale multiplier to compensate for square crops
 
+/**
+ * Post-processes pose landmarks to estimate missing joints (e.g. if hips are cut off at bottom of screen)
+ */
+export function estimateMissingLandmarks(landmarks: PoseLandmark[]): PoseLandmark[] {
+  if (!landmarks || landmarks.length < 33) return landmarks;
+
+  // Make a copy of landmarks so we don't mutate the original state
+  const processed = landmarks.map(lm => ({ ...lm }));
+
+  const lShoulder = processed[POSE_LANDMARKS.LEFT_SHOULDER];
+  const rShoulder = processed[POSE_LANDMARKS.RIGHT_SHOULDER];
+
+  const shouldersVisible =
+    lShoulder &&
+    rShoulder &&
+    lShoulder.visibility >= 0.5 &&
+    rShoulder.visibility >= 0.5;
+
+  if (shouldersVisible) {
+    // 1. Estimate elbows if missing
+    if (!processed[POSE_LANDMARKS.LEFT_ELBOW] || processed[POSE_LANDMARKS.LEFT_ELBOW].visibility < 0.5) {
+      processed[POSE_LANDMARKS.LEFT_ELBOW] = {
+        x: lShoulder.x - 0.05,
+        y: lShoulder.y + 0.15,
+        z: lShoulder.z,
+        visibility: 0.8,
+      };
+    }
+    if (!processed[POSE_LANDMARKS.RIGHT_ELBOW] || processed[POSE_LANDMARKS.RIGHT_ELBOW].visibility < 0.5) {
+      processed[POSE_LANDMARKS.RIGHT_ELBOW] = {
+        x: rShoulder.x + 0.05,
+        y: rShoulder.y + 0.15,
+        z: rShoulder.z,
+        visibility: 0.8,
+      };
+    }
+
+    // 2. Estimate hips if missing
+    const shoulderWidth = Math.hypot(rShoulder.x - lShoulder.x, rShoulder.y - lShoulder.y);
+    const torsoHeight = shoulderWidth * 1.5;
+
+    const leftHipIndex = POSE_LANDMARKS.LEFT_HIP;
+    const rightHipIndex = POSE_LANDMARKS.RIGHT_HIP;
+
+    if (!processed[leftHipIndex] || processed[leftHipIndex].visibility < 0.5) {
+      processed[leftHipIndex] = {
+        x: lShoulder.x,
+        y: lShoulder.y + torsoHeight,
+        z: lShoulder.z,
+        visibility: 0.8,
+      };
+    }
+
+    if (!processed[rightHipIndex] || processed[rightHipIndex].visibility < 0.5) {
+      processed[rightHipIndex] = {
+        x: rShoulder.x,
+        y: rShoulder.y + torsoHeight,
+        z: rShoulder.z,
+        visibility: 0.8,
+      };
+    }
+  }
+
+  // 3. Estimate knees and ankles for bottoms if hips are visible but leg joints are missing
+  const lHip = processed[POSE_LANDMARKS.LEFT_HIP];
+  const rHip = processed[POSE_LANDMARKS.RIGHT_HIP];
+  const hipsVisible =
+    lHip &&
+    rHip &&
+    lHip.visibility >= 0.5 &&
+    rHip.visibility >= 0.5;
+
+  if (hipsVisible) {
+    const hipWidth = Math.hypot(rHip.x - lHip.x, rHip.y - lHip.y);
+    const legLength = hipWidth * 2.5;
+
+    if (!processed[POSE_LANDMARKS.LEFT_KNEE] || processed[POSE_LANDMARKS.LEFT_KNEE].visibility < 0.5) {
+      processed[POSE_LANDMARKS.LEFT_KNEE] = {
+        x: lHip.x,
+        y: lHip.y + legLength * 0.5,
+        z: lHip.z,
+        visibility: 0.8,
+      };
+    }
+    if (!processed[POSE_LANDMARKS.RIGHT_KNEE] || processed[POSE_LANDMARKS.RIGHT_KNEE].visibility < 0.5) {
+      processed[POSE_LANDMARKS.RIGHT_KNEE] = {
+        x: rHip.x,
+        y: rHip.y + legLength * 0.5,
+        z: rHip.z,
+        visibility: 0.8,
+      };
+    }
+    if (!processed[POSE_LANDMARKS.LEFT_ANKLE] || processed[POSE_LANDMARKS.LEFT_ANKLE].visibility < 0.5) {
+      processed[POSE_LANDMARKS.LEFT_ANKLE] = {
+        x: lHip.x,
+        y: lHip.y + legLength,
+        z: lHip.z,
+        visibility: 0.8,
+      };
+    }
+    if (!processed[POSE_LANDMARKS.RIGHT_ANKLE] || processed[POSE_LANDMARKS.RIGHT_ANKLE].visibility < 0.5) {
+      processed[POSE_LANDMARKS.RIGHT_ANKLE] = {
+        x: rHip.x,
+        y: rHip.y + legLength,
+        z: rHip.z,
+        visibility: 0.8,
+      };
+    }
+  }
+
+  return processed;
+}
+
 interface PixelCoord {
   x: number;
   y: number;
@@ -95,8 +208,9 @@ export function areLandmarksVisible(
   landmarks: PoseLandmark[],
   category: ClothingCategory
 ): boolean {
+  const estimated = estimateMissingLandmarks(landmarks);
   const requiredIndices = getCategoryLandmarks(category);
-  return requiredIndices.every((idx) => landmarks[idx]?.visibility >= MIN_VISIBILITY);
+  return requiredIndices.every((idx) => estimated[idx]?.visibility >= MIN_VISIBILITY);
 }
 
 /**
@@ -216,11 +330,12 @@ export function calculateClothingTransform(
   videoWidth?: number,
   videoHeight?: number
 ): ClothingTransform | null {
+  const estimated = estimateMissingLandmarks(landmarks);
   switch (category) {
     case 'tops':
-      return calculateTopTransform(landmarks, canvasWidth, canvasHeight, videoWidth, videoHeight);
+      return calculateTopTransform(estimated, canvasWidth, canvasHeight, videoWidth, videoHeight);
     case 'bottoms':
-      return calculateBottomTransform(landmarks, canvasWidth, canvasHeight, videoWidth, videoHeight);
+      return calculateBottomTransform(estimated, canvasWidth, canvasHeight, videoWidth, videoHeight);
   }
 }
 
@@ -265,23 +380,24 @@ export function getClothingQuad(
   videoWidth?: number,
   videoHeight?: number
 ): ClothingQuad | null {
+  const estimated = estimateMissingLandmarks(landmarks);
   // Check visibility
-  if (!areLandmarksVisible(landmarks, category)) {
+  if (!areLandmarksVisible(estimated, category)) {
     return null;
   }
 
   // If anchor points provided and valid, use them for direct mapping
   if (anchorPoints && anchorPoints.leftShoulder && anchorPoints.rightShoulder) {
     console.log('Using detected anchor points for precise alignment');
-    return mapAnchorsToBody(landmarks, category, anchorPoints, canvasWidth, canvasHeight, videoWidth, videoHeight);
+    return mapAnchorsToBody(estimated, category, anchorPoints, canvasWidth, canvasHeight, videoWidth, videoHeight);
   }
 
   // Fallback to landmark-based quad (original behavior)
   if (category === 'tops') {
-    const lShoulder = landmarks[POSE_LANDMARKS.LEFT_SHOULDER];
-    const rShoulder = landmarks[POSE_LANDMARKS.RIGHT_SHOULDER];
-    const lHip = landmarks[POSE_LANDMARKS.LEFT_HIP];
-    const rHip = landmarks[POSE_LANDMARKS.RIGHT_HIP];
+    const lShoulder = estimated[POSE_LANDMARKS.LEFT_SHOULDER];
+    const rShoulder = estimated[POSE_LANDMARKS.RIGHT_SHOULDER];
+    const lHip = estimated[POSE_LANDMARKS.LEFT_HIP];
+    const rHip = estimated[POSE_LANDMARKS.RIGHT_HIP];
 
     return {
       topLeft: landmarkToPixel(lShoulder, canvasWidth, canvasHeight, videoWidth, videoHeight),
@@ -291,10 +407,10 @@ export function getClothingQuad(
     };
   } else {
     // bottoms
-    const lHip = landmarks[POSE_LANDMARKS.LEFT_HIP];
-    const rHip = landmarks[POSE_LANDMARKS.RIGHT_HIP];
-    const lAnkle = landmarks[POSE_LANDMARKS.LEFT_ANKLE];
-    const rAnkle = landmarks[POSE_LANDMARKS.RIGHT_ANKLE];
+    const lHip = estimated[POSE_LANDMARKS.LEFT_HIP];
+    const rHip = estimated[POSE_LANDMARKS.RIGHT_HIP];
+    const lAnkle = estimated[POSE_LANDMARKS.LEFT_ANKLE];
+    const rAnkle = estimated[POSE_LANDMARKS.RIGHT_ANKLE];
 
     return {
       topLeft: landmarkToPixel(lHip, canvasWidth, canvasHeight, videoWidth, videoHeight),
