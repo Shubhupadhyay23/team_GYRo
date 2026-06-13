@@ -126,14 +126,28 @@ export default function PhonePage() {
 
   if (state === "loading") {
     return (
-      <main className="min-h-screen bg-white flex items-center justify-center">
+      <main
+        className="min-h-screen flex items-center justify-center text-white"
+        style={{
+          background: `linear-gradient(rgba(10, 10, 10, 0.85), rgba(10, 10, 10, 0.85)), url('/background.jpg') no-repeat center center/cover`,
+          fontFamily: "'Outfit', 'Inter', system-ui, -apple-system, sans-serif",
+        }}
+      >
+        <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet" />
         <p className="text-zinc-400 animate-pulse">Loading...</p>
       </main>
     );
   }
 
   return (
-    <main className="min-h-screen bg-white text-zinc-900">
+    <main
+      className="min-h-screen text-white flex flex-col items-center justify-center p-4 relative overflow-hidden"
+      style={{
+        background: `linear-gradient(rgba(10, 10, 10, 0.85), rgba(10, 10, 10, 0.85)), url('/background.jpg') no-repeat center center/cover`,
+        fontFamily: "'Outfit', 'Inter', system-ui, -apple-system, sans-serif",
+      }}
+    >
+      <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet" />
       {state === "signin" && (
         <SignInView onComplete={handleSignInComplete} error={error} setError={setError} />
       )}
@@ -141,7 +155,7 @@ export default function PhonePage() {
         <QuestionnaireView onSubmit={handleQuestionnaireSubmit} />
       )}
       {state === "queue" && user && (
-        <div className="flex flex-col items-center justify-center min-h-screen p-4">
+        <div className="w-full max-w-md bg-white/[0.03] backdrop-blur-xl border border-white/[0.08] rounded-2xl p-6 md:p-8 flex flex-col items-center justify-center shadow-2xl relative z-10">
           <QueueStatus userId={user.id} onBecameActive={handleBecameActive} onLeave={handleLeaveQueue} />
         </div>
       )}
@@ -203,50 +217,50 @@ function SignInView({
   }, [isLogin, email, password, name, phone, selfie, onComplete, setError]);
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen p-4 gap-4">
-      <div className="text-center">
-        <h1 className="text-2xl font-bold mb-1">Mirrorless</h1>
-        <p className="text-zinc-500 text-sm">Your AI stylist awaits</p>
+    <div className="w-full max-w-sm bg-white/[0.03] backdrop-blur-xl border border-white/[0.08] rounded-2xl p-6 md:p-8 flex flex-col gap-4 shadow-2xl relative z-10">
+      <div className="text-center mb-1">
+        <h1 className="text-2xl font-bold mb-1 bg-gradient-to-r from-white to-zinc-400 bg-clip-text text-transparent">Mirrorless</h1>
+        <p className="text-zinc-400 text-sm">Your AI stylist awaits</p>
       </div>
 
       {!isLogin && <SelfieCapture onCapture={setSelfie} />}
 
       {!isLogin && (
-        <div className="w-full max-w-sm">
-          <label className="block text-sm font-semibold mb-1">Your name</label>
+        <div className="w-full">
+          <label className="block text-xs font-semibold mb-1 text-zinc-300">Your name</label>
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="Enter your name"
-            className="w-full px-3 py-2.5 border border-zinc-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-zinc-900"
+            className="w-full px-3 py-2.5 bg-white/5 border border-white/10 rounded-xl text-sm text-white placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-400 transition-all"
           />
         </div>
       )}
 
-      <div className="w-full max-w-sm">
-        <label className="block text-sm font-semibold mb-1">Email</label>
+      <div className="w-full">
+        <label className="block text-xs font-semibold mb-1 text-zinc-300">Email</label>
         <input
           type="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           placeholder="your@email.com"
-          className="w-full px-3 py-2.5 border border-zinc-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-zinc-900"
+          className="w-full px-3 py-2.5 bg-white/5 border border-white/10 rounded-xl text-sm text-white placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-400 transition-all"
         />
       </div>
 
-      <div className="w-full max-w-sm">
-        <label className="block text-sm font-semibold mb-1">Password</label>
+      <div className="w-full">
+        <label className="block text-xs font-semibold mb-1 text-zinc-300">Password</label>
         <input
           type="password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           placeholder="••••••••"
-          className="w-full px-3 py-2.5 border border-zinc-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-zinc-900"
+          className="w-full px-3 py-2.5 bg-white/5 border border-white/10 rounded-xl text-sm text-white placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-400 transition-all"
         />
       </div>
 
       {!isLogin && (
-        <div className="w-full max-w-sm">
+        <div className="w-full">
           <PhoneInput
             value={phone}
             onChange={setPhone}
@@ -258,16 +272,16 @@ function SignInView({
       <button
         onClick={handleSubmit}
         disabled={loading}
-        className="w-full max-w-sm bg-zinc-900 text-white rounded-xl py-3 text-sm font-semibold disabled:opacity-50"
+        className="w-full bg-gradient-to-r from-indigo-600 to-violet-700 hover:from-indigo-500 hover:to-violet-600 text-white rounded-xl py-3 text-sm font-semibold disabled:opacity-50 transition-all shadow-[0_4px_15px_rgba(99,102,241,0.2)] hover:shadow-[0_4px_20px_rgba(99,102,241,0.4)]"
       >
         {loading ? "Please wait..." : isLogin ? "Log In" : "Sign Up"}
       </button>
 
-      {error && <p className="text-red-500 text-sm text-center">{error}</p>}
+      {error && <p className="text-red-400 text-sm text-center font-medium mt-1">{error}</p>}
       
       <button 
         onClick={() => { setIsLogin(!isLogin); setError(""); }}
-        className="text-sm text-zinc-500 underline mt-2"
+        className="text-sm text-zinc-400 hover:text-white underline mt-2 transition-colors self-center"
       >
         {isLogin ? "Need an account? Sign up" : "Already have an account? Log in"}
       </button>
@@ -314,99 +328,111 @@ function QuestionnaireView({
   }
 
   return (
-    <div className="p-4 max-w-lg mx-auto pb-6">
-      <h2 className="text-xl font-bold mb-0.5">Let&apos;s get to know you</h2>
-      <p className="text-zinc-500 text-xs mb-4">
-        Quick style questions to personalize your experience.
-      </p>
+    <div className="w-full max-w-md bg-white/[0.03] backdrop-blur-xl border border-white/[0.08] rounded-2xl p-6 md:p-8 flex flex-col gap-4 shadow-2xl relative z-10">
+      <div>
+        <h2 className="text-xl font-bold mb-0.5 text-white">Let&apos;s get to know you</h2>
+        <p className="text-zinc-400 text-xs">
+          Quick style questions to personalize your experience.
+        </p>
+      </div>
 
       {/* Gender */}
-      <label className="block text-xs font-semibold mb-1">Gender</label>
-      <select
-        value={gender}
-        onChange={(e) => setGender(e.target.value)}
-        className="w-full px-3 py-2 border border-zinc-200 rounded-lg text-sm mb-3 focus:outline-none focus:ring-2 focus:ring-zinc-900"
-      >
-        <option value="mens">Men</option>
-        <option value="womens">Women</option>
-        <option value="unspecified">Prefer not to say</option>
-      </select>
+      <div>
+        <label className="block text-xs font-semibold mb-1 text-zinc-300">Gender</label>
+        <select
+          value={gender}
+          onChange={(e) => setGender(e.target.value)}
+          className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-400 [&>option]:bg-zinc-950 [&>option]:text-white transition-all"
+        >
+          <option value="mens">Men</option>
+          <option value="womens">Women</option>
+          <option value="unspecified">Prefer not to say</option>
+        </select>
+      </div>
 
       {/* Brands */}
-      <label className="block text-xs font-semibold mb-1">
-        Favorite brands (comma-separated)
-      </label>
-      <input
-        value={brands}
-        onChange={(e) => setBrands(e.target.value)}
-        placeholder="Nike, Zara, Uniqlo"
-        className="w-full px-3 py-2 border border-zinc-200 rounded-lg text-sm mb-3 focus:outline-none focus:ring-2 focus:ring-zinc-900"
-      />
+      <div>
+        <label className="block text-xs font-semibold mb-1 text-zinc-300">
+          Favorite brands (comma-separated)
+        </label>
+        <input
+          value={brands}
+          onChange={(e) => setBrands(e.target.value)}
+          placeholder="Nike, Zara, Uniqlo"
+          className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-white placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-400 transition-all"
+        />
+      </div>
 
       {/* Style */}
-      <label className="block text-xs font-semibold mb-1.5">Style preferences</label>
-      <div className="flex flex-wrap gap-1.5 mb-3">
-        {STYLE_OPTIONS.map((s) => (
-          <button
-            key={s}
-            onClick={() => toggle(styles, s, setStyles)}
-            className={`px-3 py-1.5 rounded-full text-xs border transition-colors ${
-              styles.includes(s)
-                ? "bg-zinc-900 text-white border-zinc-900"
-                : "bg-white text-zinc-700 border-zinc-200 hover:border-zinc-400"
-            }`}
-          >
-            {s}
-          </button>
-        ))}
+      <div>
+        <label className="block text-xs font-semibold mb-1.5 text-zinc-300">Style preferences</label>
+        <div className="flex flex-wrap gap-1.5">
+          {STYLE_OPTIONS.map((s) => (
+            <button
+              key={s}
+              onClick={() => toggle(styles, s, setStyles)}
+              className={`px-3 py-1.5 rounded-full text-xs border transition-all ${
+                styles.includes(s)
+                  ? "bg-indigo-600 text-white border-indigo-500 shadow-[0_2px_8px_rgba(99,102,241,0.4)]"
+                  : "bg-white/5 text-zinc-300 border-white/10 hover:border-white/30 hover:bg-white/10"
+              }`}
+            >
+              {s}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Occasions */}
-      <label className="block text-xs font-semibold mb-1.5">Occasions</label>
-      <div className="flex flex-wrap gap-1.5 mb-3">
-        {OCCASION_OPTIONS.map((o) => (
-          <button
-            key={o}
-            onClick={() => toggle(occasions, o, setOccasions)}
-            className={`px-3 py-1.5 rounded-full text-xs border transition-colors ${
-              occasions.includes(o)
-                ? "bg-zinc-900 text-white border-zinc-900"
-                : "bg-white text-zinc-700 border-zinc-200 hover:border-zinc-400"
-            }`}
-          >
-            {o}
-          </button>
-        ))}
+      <div>
+        <label className="block text-xs font-semibold mb-1.5 text-zinc-300 font-sans">Occasions</label>
+        <div className="flex flex-wrap gap-1.5">
+          {OCCASION_OPTIONS.map((o) => (
+            <button
+              key={o}
+              onClick={() => toggle(occasions, o, setOccasions)}
+              className={`px-3 py-1.5 rounded-full text-xs border transition-all ${
+                occasions.includes(o)
+                  ? "bg-indigo-600 text-white border-indigo-500 shadow-[0_2px_8px_rgba(99,102,241,0.4)]"
+                  : "bg-white/5 text-zinc-300 border-white/10 hover:border-white/30 hover:bg-white/10"
+              }`}
+            >
+              {o}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Price range */}
-      <label className="block text-xs font-semibold mb-1.5">
-        Price range: ${priceMin} – ${priceMax}
-      </label>
-      <div className="flex gap-3 items-center mb-4">
-        <input
-          type="range"
-          min={0}
-          max={500}
-          step={10}
-          value={priceMin}
-          onChange={(e) => setPriceMin(Number(e.target.value))}
-          className="flex-1"
-        />
-        <input
-          type="range"
-          min={0}
-          max={500}
-          step={10}
-          value={priceMax}
-          onChange={(e) => setPriceMax(Number(e.target.value))}
-          className="flex-1"
-        />
+      <div>
+        <label className="block text-xs font-semibold mb-1.5 text-zinc-300">
+          Price range: ${priceMin} – ${priceMax}
+        </label>
+        <div className="flex gap-3 items-center">
+          <input
+            type="range"
+            min={0}
+            max={500}
+            step={10}
+            value={priceMin}
+            onChange={(e) => setPriceMin(Number(e.target.value))}
+            className="flex-1 accent-indigo-500"
+          />
+          <input
+            type="range"
+            min={0}
+            max={500}
+            step={10}
+            value={priceMax}
+            onChange={(e) => setPriceMax(Number(e.target.value))}
+            className="flex-1 accent-indigo-500"
+          />
+        </div>
       </div>
 
       <button
         onClick={handleSubmit}
-        className="w-full bg-zinc-900 text-white rounded-xl py-3 text-sm font-semibold"
+        className="w-full bg-gradient-to-r from-indigo-600 to-violet-700 hover:from-indigo-500 hover:to-violet-600 text-white rounded-xl py-3 text-sm font-semibold transition-all shadow-[0_4px_15px_rgba(99,102,241,0.2)] hover:shadow-[0_4px_20px_rgba(99,102,241,0.4)]"
       >
         Join Queue
       </button>
@@ -444,22 +470,22 @@ function IdleView() {
   const seconds = elapsed % 60;
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen p-4 gap-4">
-      <div className="w-14 h-14 rounded-full bg-green-500 flex items-center justify-center">
-        <span className="text-white text-2xl">✦</span>
+    <div className="w-full max-w-sm bg-white/[0.03] backdrop-blur-xl border border-white/[0.08] rounded-2xl p-6 md:p-8 flex flex-col items-center gap-4 shadow-2xl relative z-10">
+      <div className="w-14 h-14 rounded-full bg-gradient-to-tr from-indigo-500 to-violet-600 flex items-center justify-center shadow-[0_0_15px_rgba(99,102,241,0.5)]">
+        <span className="text-white text-2xl animate-pulse">✦</span>
       </div>
 
-      <h2 className="text-xl font-bold text-center">
+      <h2 className="text-xl font-bold text-center text-white">
         You&apos;re at the mirror!
       </h2>
 
       <div className="h-10 flex items-center">
-        <p className="text-zinc-500 text-center text-xs animate-pulse transition-all">
+        <p className="text-zinc-400 text-center text-xs animate-pulse transition-all">
           {TIPS[tipIndex]}
         </p>
       </div>
 
-      <div className="text-zinc-400 text-xs font-mono">
+      <div className="text-indigo-300 text-xs font-mono bg-indigo-950/40 border border-indigo-500/20 px-3 py-1.5 rounded-lg shadow-[inset_0_1px_3px_rgba(0,0,0,0.4)]">
         {String(minutes).padStart(2, "0")}:{String(seconds).padStart(2, "0")}
       </div>
     </div>
@@ -476,24 +502,24 @@ function RecapView({
   onDone: () => void;
 }) {
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen p-4 gap-4">
-      <h2 className="text-xl font-bold">Session Complete</h2>
+    <div className="w-full max-w-sm bg-white/[0.03] backdrop-blur-xl border border-white/[0.08] rounded-2xl p-6 md:p-8 flex flex-col items-center gap-5 shadow-2xl relative z-10">
+      <h2 className="text-xl font-bold text-white">Session Complete</h2>
 
       {data.summary && (
-        <p className="text-zinc-600 text-center text-sm max-w-sm">{data.summary}</p>
+        <p className="text-zinc-300 text-center text-sm leading-relaxed max-w-sm">{data.summary}</p>
       )}
 
-      <div className="flex gap-6">
+      <div className="flex gap-10 my-1">
         {data.items_shown !== undefined && (
           <div className="text-center">
-            <p className="text-2xl font-bold">{data.items_shown}</p>
-            <p className="text-xs text-zinc-500">Items Shown</p>
+            <p className="text-3xl font-bold text-white bg-gradient-to-r from-white to-zinc-400 bg-clip-text text-transparent">{data.items_shown}</p>
+            <p className="text-xs text-zinc-400 mt-1 uppercase tracking-wider">Items Shown</p>
           </div>
         )}
         {data.items_liked !== undefined && (
           <div className="text-center">
-            <p className="text-2xl font-bold">{data.items_liked}</p>
-            <p className="text-xs text-zinc-500">Liked</p>
+            <p className="text-3xl font-bold text-indigo-300 bg-gradient-to-r from-indigo-300 to-violet-300 bg-clip-text text-transparent">{data.items_liked}</p>
+            <p className="text-xs text-zinc-400 mt-1 uppercase tracking-wider">Liked</p>
           </div>
         )}
       </div>
@@ -506,17 +532,17 @@ function RecapView({
           style={{
             display: "block",
             width: "100%",
-            maxWidth: "24rem",
             padding: "12px 20px",
             fontSize: 14,
             fontWeight: 600,
             color: "#fff",
-            background: "#5B4FE9",
+            background: "linear-gradient(135deg, #4f46e5 0%, #3730a3 100%)",
             border: "none",
             borderRadius: 12,
             textAlign: "center",
             textDecoration: "none",
             boxSizing: "border-box",
+            boxShadow: "0 4px 15px rgba(99, 102, 241, 0.2)",
           }}
         >
           Continue on Poke
@@ -525,7 +551,7 @@ function RecapView({
 
       <button
         onClick={onDone}
-        className="w-full max-w-sm bg-zinc-900 text-white rounded-xl py-3 text-sm font-semibold"
+        className="w-full bg-white/5 border border-white/10 hover:bg-white/10 text-white rounded-xl py-3 text-sm font-semibold transition-all"
       >
         Done
       </button>

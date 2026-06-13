@@ -57,7 +57,7 @@ export default function PhoneInput({
 
   return (
     <div className="w-full">
-      <label className="block text-sm font-semibold mb-1">
+      <label className="block text-xs font-semibold mb-1 text-zinc-300">
         Phone number
       </label>
       <div className="relative">
@@ -66,27 +66,27 @@ export default function PhoneInput({
           value={displayValue}
           onChange={(e) => handleChange(e.target.value)}
           placeholder="+91 98765 43210"
-          className={`w-full px-3 py-2.5 pr-10 border rounded-xl text-sm focus:outline-none focus:ring-2 ${
+          className={`w-full px-3 py-2.5 pr-10 border rounded-xl text-sm bg-white/5 text-white placeholder-zinc-500 focus:outline-none focus:ring-2 transition-all ${
             showValidation
               ? isValid
-                ? "border-green-500 focus:ring-green-500"
-                : "border-red-500 focus:ring-red-500"
-              : "border-zinc-200 focus:ring-zinc-900"
+                ? "border-green-500 focus:ring-green-500/50"
+                : "border-red-500 focus:ring-red-500/50"
+              : "border-white/10 focus:ring-indigo-500/50 focus:border-indigo-400"
           }`}
         />
         {showValidation && (
           <div className="absolute right-3 top-1/2 -translate-y-1/2">
             {isValid ? (
-              <span className="text-green-500 text-sm">✓</span>
+              <span className="text-green-400 text-sm">✓</span>
             ) : (
-              <span className="text-red-500 text-sm">✕</span>
+              <span className="text-red-400 text-sm">✕</span>
             )}
           </div>
         )}
       </div>
-      {error && <p className="text-red-500 text-xs mt-1">{error}</p>}
+      {error && <p className="text-red-400 text-xs mt-1 font-medium">{error}</p>}
       {showValidation && !isValid && !error && (
-        <p className="text-red-500 text-xs mt-1">Invalid phone number</p>
+        <p className="text-red-400 text-xs mt-1 font-medium">Invalid phone number</p>
       )}
     </div>
   );
