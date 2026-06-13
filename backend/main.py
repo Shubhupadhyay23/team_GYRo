@@ -266,7 +266,7 @@ Reply ONLY with valid JSON (no markdown):
 
     try:
         response = await client.chat.completions.create(
-            model="gemini-2.5-flash",
+            model="gemini-2.5-flash-lite",
             max_tokens=1024,
             messages=[{"role": "user", "content": claude_prompt}],
             response_format={"type": "json_object"}

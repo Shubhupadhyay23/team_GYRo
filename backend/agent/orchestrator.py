@@ -38,8 +38,8 @@ from services.user_data_service import (
 
 load_dotenv()
 
-SONNET_MODEL = "gemini-2.5-flash"
-HAIKU_MODEL = "gemini-2.5-flash"
+SONNET_MODEL = "gemini-2.5-flash-lite"
+HAIKU_MODEL = "gemini-2.5-flash-lite"
 SILENCE_TIMEOUT_SECONDS = 15
 EVENT_BATCH_WINDOW_MS = 200
 SOFT_API_LIMIT = 20
@@ -87,7 +87,7 @@ class MiraOrchestrator:
         self.sio = socket_io
         self.sessions: dict[str, SessionState] = {}
         self._silence_tasks: dict[str, asyncio.Task] = {}
-        self.preferred_model = "gemini-2.5-flash"
+        self.preferred_model = "gemini-2.5-flash-lite"
 
     async def interrupt(self, user_id: str) -> None:
         """Request interruption of the current Claude stream for a user.
@@ -108,7 +108,7 @@ class MiraOrchestrator:
 
         session = SessionState(user_id=user_id)
         self.sessions[user_id] = session
-        self.preferred_model = "gemini-2.5-flash"
+        self.preferred_model = "gemini-2.5-flash-lite"
 
         # Load user data from DB in parallel — fall back to empty defaults if any fail
         profile = {}
@@ -511,6 +511,23 @@ class MiraOrchestrator:
 
     def _get_local_fallback_response(self, session: SessionState, user_message: str) -> tuple[str, str | None]:
         msg = user_message.lower()
+        
+        # Check if this is the start of the session (intro / welcome)
+        # Note: the event message for session_start is "A new user just stepped up to the mirror. Introduce yourself and start the session."
+        if "stepped up to the mirror" in msg or "introduce yourself" in msg or len(session.conversation_history) <= 1:
+            return (
+                "Hey there, new face! I'm Mira, your personal stylist. Let's get a look at you first! Hold still while I take a quick photo of your outfit.",
+                "take_photo"
+            )
+
+        # Check if this is a snapshot response turn
+        # Note: the user message for snapshot starts with "Here's a snapshot of the user" or includes "snapshot"
+        if "snapshot" in msg or "photo of the user" in msg:
+            return (
+                "I see you! Let me search for the perfect pieces to elevate your look.",
+                "give_recommendation"
+            )
+
         if any(w in msg for w in ["photo", "camera", "check", "look", "wear", "outfit", "see"]):
             return (
                 "Let's get a look at you first! Hold still while I take a quick photo of your outfit.",
@@ -574,7 +591,7 @@ class MiraOrchestrator:
         interrupted = False
         stream = None
 
-        models_to_try = [model_default, "gemini-2.5-flash", "gemini-1.5-flash"]
+        models_to_try = [model_default, "gemini-2.5-flash-lite", "gemini-flash-latest", "gemini-2.5-flash", "gemini-flash-lite-latest"]
         seen = set()
         models_to_try = [x for x in models_to_try if not (x in seen or seen.add(x))]
         base_delay = 1.0
@@ -729,8 +746,9 @@ class MiraOrchestrator:
         except Exception as e:
             error_msg = str(e)
             print(f"[mira] Gemini API call failed for {session.user_id}: {error_msg}")
-            if self.sio:
-                await self.sio.emit("session_error", {"error": f"API Error (Self-Healed): {error_msg}"}, room=session.user_id)
+            # Do NOT emit session_error to frontend for self-healed API failures,
+            # as it will disconnect/abort the frontend session prematurely.
+            pass
             
             # Extract last user message to understand context
             user_msg_text = ""
@@ -869,7 +887,7 @@ class MiraOrchestrator:
         print("[mira] Sending photo to Gemini Vision model...")
         try:
             vision_response = await self.client.chat.completions.create(
-                model="gemini-2.5-flash",
+                model="gemini-2.5-flash-lite",
                 messages=[
                     {
                         "role": "user",
@@ -1276,7 +1294,7 @@ async def generate_outfit_recommendations(
         # Run Gemini + flat lays in parallel
         gemini_response, flat_lay_map = await asyncio.gather(
             openai_client.chat.completions.create(
-                model="gemini-2.5-flash",
+                model="gemini-2.5-flash-lite",
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt}

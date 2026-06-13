@@ -171,6 +171,9 @@ export class StreamingTTS {
     onStart?: () => void,
     onEnd?: () => void,
   ): Promise<void> {
+    // Trigger onStart immediately so the text display is printed instantly
+    onStart?.();
+
     return new Promise<void>((resolve) => {
       this.pendingResolve = resolve;
 
@@ -263,7 +266,6 @@ export class StreamingTTS {
             if (!started) {
               started = true;
               console.log("[StreamingTTS] Playback starting");
-              onStart?.();
               audio.play().catch(() => {
                 console.warn("[StreamingTTS] Autoplay blocked");
               });
@@ -327,6 +329,9 @@ export class StreamingTTS {
       return;
     }
 
+    // Trigger onStart immediately so the text displays even if audio is blocked
+    onStart?.();
+
     // Cancel any ongoing browser speech
     window.speechSynthesis.cancel();
 
@@ -351,20 +356,24 @@ export class StreamingTTS {
     
     utterance.rate = 1.05;
 
-    utterance.onstart = () => {
-      if (this.generation !== gen) {
-        window.speechSynthesis.cancel();
-        this.isBrowserSpeaking = false;
-        return;
-      }
-      onStart?.();
-    };
+    let settled = false;
+    let safetyTimeout: ReturnType<typeof setTimeout>;
 
     const done = () => {
+      if (settled) return;
+      settled = true;
+      if (safetyTimeout) {
+        clearTimeout(safetyTimeout);
+      }
       this.isBrowserSpeaking = false;
       this.speaking = false;
       onEnd?.();
     };
+
+    safetyTimeout = setTimeout(() => {
+      console.warn("[StreamingTTS] SpeechSynthesis safety timeout fired — resolving to prevent deadlock");
+      done();
+    }, Math.max(4000, text.length * 100)); // Character-based scale, min 4s
 
     utterance.onend = done;
     utterance.onerror = done;
