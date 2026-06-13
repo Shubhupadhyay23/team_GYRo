@@ -136,6 +136,7 @@ function LaptopPage() {
 
   // ── Chat text input ──
   const [chatInput, setChatInput] = useState("");
+  const [socketConnected, setSocketConnected] = useState(socket.connected);
 
   // ── Mira video avatar + voice ──
   const mira = useMiraVideoAvatar();
@@ -184,9 +185,18 @@ function LaptopPage() {
     socket.connect();
     socket.emit("join_mirror_room");
 
-    const onConnect = () => console.log("[Mirror:Socket] Connected, id:", socket.id);
-    const onConnectError = (err: Error) => console.error("[Mirror:Socket] Connection error:", err.message);
-    const onDisconnect = (reason: string) => console.warn("[Mirror:Socket] Disconnected:", reason);
+    const onConnect = () => {
+      console.log("[Mirror:Socket] Connected, id:", socket.id);
+      setSocketConnected(true);
+    };
+    const onConnectError = (err: Error) => {
+      console.error("[Mirror:Socket] Connection error:", err.message);
+      setSocketConnected(false);
+    };
+    const onDisconnect = (reason: string) => {
+      console.warn("[Mirror:Socket] Disconnected:", reason);
+      setSocketConnected(false);
+    };
 
     socket.on("connect", onConnect);
     socket.on("connect_error", onConnectError);
@@ -311,6 +321,8 @@ function LaptopPage() {
         }
         return;
       }
+
+      console.log("[Telemetry] 5. Socket received 'mira_speech':", data);
 
       // Fallback session detection (STT is delayed — started after opening finishes)
       if (!sessionActive && !isStarting) {
@@ -517,6 +529,7 @@ function LaptopPage() {
     if (!chatInput.trim() || !userId) return;
     const text = chatInput.trim();
     setChatInput("");
+    console.log("[Telemetry] 1. Sent chat message:", text);
 
     if (mira.isSpeaking) {
       mira.stop();
@@ -877,6 +890,36 @@ function LaptopPage() {
         overflow: "hidden",
       }}
     >
+      {/* Socket Connection Status Indicator (Visible everywhere) */}
+      <div
+        style={{
+          position: "absolute",
+          top: 24,
+          left: 24,
+          zIndex: 40,
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          background: "rgba(0, 0, 0, 0.6)",
+          padding: "6px 12px",
+          borderRadius: 20,
+          border: "1px solid rgba(255, 255, 255, 0.15)",
+        }}
+      >
+        <span
+          style={{
+            width: 8,
+            height: 8,
+            borderRadius: "50%",
+            background: socketConnected ? "#10B981" : "#EF4444",
+            boxShadow: socketConnected ? "0 0 8px #10B981" : "0 0 8px #EF4444",
+          }}
+        />
+        <span style={{ color: "rgba(255, 255, 255, 0.8)", fontSize: "0.75rem", fontWeight: 500 }}>
+          {socketConnected ? "Connected" : "Disconnected"}
+        </span>
+      </div>
+
       {/* Visible camera feed for Laptop Mode (mirrored) */}
       <video
         ref={videoRef}

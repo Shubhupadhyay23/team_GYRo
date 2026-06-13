@@ -478,7 +478,9 @@ async def mirror_event(sid, data):
         return
     event_type = event.get("type", "unknown")
     if event_type == "voice":
-        print(f"[socket] mirror_event voice from {user_id}: {event.get('transcript', '')[:120]}")
+        transcript = event.get('transcript', '')
+        print(f"[socket] mirror_event voice from {user_id}: {transcript[:120]}")
+        print(f"[Telemetry] 2. Received socket event 'mirror_event' (voice) from {user_id}: {transcript}")
     else:
         print(f"[socket] mirror_event {event_type} from {user_id}")
     try:

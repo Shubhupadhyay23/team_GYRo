@@ -541,6 +541,28 @@ class MiraOrchestrator:
             return
 
         session.api_calls += 1
+
+        # Check for Mock LLM Mode
+        if os.environ.get("MOCK_LLM") == "true":
+            print("[Telemetry] 3. [MOCK MODE] LLM Request intercepted (Mock Mode active)")
+            mock_text = "[emotion:happy] Hello! I am Mira, your mock stylist. Since mock mode is active, I'm just saying hi! I can recommend some cool streetwear like Stüssy hoodies or Carhartt cargo pants."
+            collected_text = ""
+            # Simulate streaming mock text
+            chunks = [mock_text[i:i+8] for i in range(0, len(mock_text), 8)]
+            for chunk in chunks:
+                if session._interrupted:
+                    break
+                collected_text += chunk
+                print(f"[Telemetry] 4. [MOCK MODE] LLM response chunk received: {chunk}")
+                await self._stream_text(session.user_id, chunk)
+                await asyncio.sleep(0.05)
+            if not session._interrupted:
+                await self._stream_text(session.user_id, "", end_of_message=True)
+            
+            assistant_msg = {"role": "assistant", "content": collected_text or None}
+            session.conversation_history.append(assistant_msg)
+            return
+
         model_default, max_tokens = self._select_model(session)
         api_messages = self._prepare_messages(session)
 
@@ -559,6 +581,7 @@ class MiraOrchestrator:
             for attempt, current_model in enumerate(models_to_try, 1):
                 try:
                     print(f"[mira] Attempting LLM call using model {current_model} (attempt {attempt}/{len(models_to_try)}) for {session.user_id}")
+                    print("[Telemetry] 3. LLM Request sent to Claude/Gemini...")
                     stream = await self.client.chat.completions.create(
                         model=current_model,
                         max_tokens=max_tokens,
@@ -592,6 +615,7 @@ class MiraOrchestrator:
                 delta = chunk.choices[0].delta
 
                 if delta.content:
+                    print(f"[Telemetry] 4. LLM response chunk received: {delta.content}")
                     # XML Leaking Interceptor
                     # We buffer the stream to ensure we don't send <function=...> to TTS
                     stream_buffer += delta.content
