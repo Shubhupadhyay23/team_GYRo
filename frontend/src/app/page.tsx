@@ -56,18 +56,78 @@ export default function Home() {
       {/* Import premium font */}
       <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet" />
 
-      {/* Decorative ambient glow */}
+      {/* Custom Keyframes for GPU-accelerated smooth rotation and pulse glow */}
+      <style>{`
+        @keyframes rotateChakra {
+          from {
+            transform: translate(-50%, -50%) rotate(0deg);
+          }
+          to {
+            transform: translate(-50%, -50%) rotate(360deg);
+          }
+        }
+        @keyframes pulseGlow {
+          0% {
+            opacity: 0.55;
+            transform: translate(-50%, -50%) scale(0.96);
+          }
+          100% {
+            opacity: 0.95;
+            transform: translate(-50%, -50%) scale(1.04);
+          }
+        }
+      `}</style>
+
+      {/* Static mask to hide the static chakra underneath, blending into outer stars */}
       <div
         style={{
           position: "absolute",
-          top: "10%",
+          top: "50%",
           left: "50%",
-          transform: "translateX(-50%)",
-          width: "400px",
-          height: "400px",
-          background: "radial-gradient(circle, rgba(100, 140, 255, 0.08) 0%, rgba(0,0,0,0) 70%)",
+          transform: "translate(-50%, -50%)",
+          width: "90vmin",
+          height: "90vmin",
+          background: "radial-gradient(circle, #05060e 0%, #05060e 70%, rgba(5,6,14,0) 100%)",
+          borderRadius: "50%",
           pointerEvents: "none",
           zIndex: 0,
+        }}
+      />
+
+      {/* Rotating Chakra Background Layer (perfectly aligned cover image with circular mask) */}
+      <div
+        style={{
+          position: "absolute",
+          top: "50%",
+          left: "50%",
+          width: "100vmin",
+          height: "100vmin",
+          transform: "translate(-50%, -50%)",
+          borderRadius: "50%",
+          background: "url('/background.jpg') no-repeat center center/cover",
+          animation: "rotateChakra 50s linear infinite",
+          pointerEvents: "none",
+          zIndex: 0,
+          maskImage: "radial-gradient(circle, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 42%, rgba(0,0,0,0) 48%)",
+          WebkitMaskImage: "radial-gradient(circle, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 42%, rgba(0,0,0,0) 48%)",
+          transformOrigin: "center center",
+          willChange: "transform",
+        }}
+      />
+
+      {/* Subtle pulsing glow overlay behind the cards */}
+      <div
+        style={{
+          position: "absolute",
+          top: "50%",
+          left: "50%",
+          width: "80vmin",
+          height: "80vmin",
+          background: "radial-gradient(circle, rgba(165, 180, 252, 0.08) 0%, rgba(165, 180, 252, 0.02) 50%, rgba(0,0,0,0) 70%)",
+          borderRadius: "50%",
+          pointerEvents: "none",
+          zIndex: 0,
+          animation: "pulseGlow 6s ease-in-out infinite alternate",
         }}
       />
 
