@@ -84,6 +84,7 @@ class MiraOrchestrator:
         self.sio = socket_io
         self.sessions: dict[str, SessionState] = {}
         self._silence_tasks: dict[str, asyncio.Task] = {}
+        self.preferred_model = "gemini-3.1-flash-lite"
 
     async def interrupt(self, user_id: str) -> None:
         """Request interruption of the current Claude stream for a user.
@@ -104,6 +105,7 @@ class MiraOrchestrator:
 
         session = SessionState(user_id=user_id)
         self.sessions[user_id] = session
+        self.preferred_model = "gemini-3.1-flash-lite"
 
         # Load user data from DB in parallel — fall back to empty defaults if any fail
         profile = {}
@@ -292,7 +294,8 @@ class MiraOrchestrator:
 
     def _select_model(self, session: SessionState) -> tuple[str, int]:
         """Select the right model and max_tokens for this turn."""
-        return SONNET_MODEL, 2048
+        preferred = getattr(self, "preferred_model", SONNET_MODEL)
+        return preferred, 2048
 
     def _validate_history(self, session: SessionState) -> None:
         """Validate conversation history and truncate to last valid point if corrupted.
@@ -546,7 +549,9 @@ class MiraOrchestrator:
         interrupted = False
         stream = None
 
-        models_to_try = [model_default, "gemini-2.5-flash", "gemini-1.5-flash"]
+        models_to_try = [model_default, "gemini-3.1-flash-lite", "gemini-2.5-flash", "gemini-1.5-flash"]
+        seen = set()
+        models_to_try = [x for x in models_to_try if not (x in seen or seen.add(x))]
         base_delay = 1.0
 
         try:
@@ -561,6 +566,7 @@ class MiraOrchestrator:
                         tools=TOOL_DEFINITIONS,
                         stream=True
                     )
+                    self.preferred_model = current_model
                     break
                 except Exception as e:
                     error_str = str(e)
