@@ -73,6 +73,7 @@ function LaptopPage() {
 
   // ── Responsive Avatar Size ──
   const [avatarSize, setAvatarSize] = useState(180);
+  const [showDemoGuide, setShowDemoGuide] = useState(true);
   useEffect(() => {
     const updateSize = () => {
       const width = window.innerWidth;
@@ -940,6 +941,129 @@ function LaptopPage() {
         </span>
       </div>
 
+      {/* Demo Guide Toggle Button */}
+      <button
+        onClick={() => setShowDemoGuide(!showDemoGuide)}
+        style={{
+          position: "absolute",
+          top: 24,
+          left: 142,
+          zIndex: 40,
+          display: "flex",
+          alignItems: "center",
+          gap: 6,
+          background: showDemoGuide ? "rgba(100, 140, 255, 0.8)" : "rgba(0, 0, 0, 0.6)",
+          color: "#fff",
+          padding: "6px 14px",
+          borderRadius: 20,
+          border: "1px solid rgba(255, 255, 255, 0.15)",
+          fontSize: "0.75rem",
+          fontWeight: 600,
+          cursor: "pointer",
+          boxShadow: showDemoGuide ? "0 0 10px rgba(100, 140, 255, 0.5)" : "none",
+          transition: "all 0.2s ease",
+        }}
+      >
+        <span>💡</span>
+        <span>Demo Guide</span>
+      </button>
+
+      {/* Demo Guide Panel */}
+      {showDemoGuide && (
+        <div
+          style={{
+            position: "absolute",
+            top: 76,
+            right: 24,
+            width: "90%",
+            maxWidth: "340px",
+            maxHeight: "calc(100vh - 120px)",
+            background: "rgba(15, 15, 15, 0.85)",
+            backdropFilter: "blur(20px)",
+            WebkitBackdropFilter: "blur(20px)",
+            border: "1px solid rgba(255, 255, 255, 0.12)",
+            borderRadius: "16px",
+            padding: "18px",
+            color: "#fff",
+            zIndex: 45,
+            overflowY: "auto",
+            boxShadow: "0 10px 40px rgba(0,0,0,0.6)",
+            animation: "slideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1)",
+          }}
+        >
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+            <h3 style={{ margin: 0, fontSize: "1rem", fontWeight: 700, color: "#a5b4fc" }}>
+              💡 Presentation & Demo Guide
+            </h3>
+            <button
+              onClick={() => setShowDemoGuide(false)}
+              style={{
+                background: "transparent",
+                border: "none",
+                color: "rgba(255, 255, 255, 0.5)",
+                fontSize: "1.1rem",
+                cursor: "pointer",
+                padding: "0 4px",
+              }}
+            >
+              ✕
+            </button>
+          </div>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: 14, fontSize: "0.8rem", lineHeight: 1.45 }}>
+            <div>
+              <h4 style={{ margin: "0 0 4px 0", fontWeight: 600, color: "#e0e0e0" }}>
+                1. How Virtual Try-On Works
+              </h4>
+              <p style={{ margin: 0, color: "rgba(255,255,255,0.7)" }}>
+                Stand back so the camera sees your <strong>shoulders & hips</strong> (tops) and <strong>hips & ankles</strong> (bottoms).
+                If you are too close, it scales onto the static mannequin silhouette in the center.
+              </p>
+            </div>
+
+            <div>
+              <h4 style={{ margin: "0 0 4px 0", fontWeight: 600, color: "#e0e0e0" }}>
+                2. Live Demo Tricks for Judges
+              </h4>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                <div style={{ background: "rgba(255,255,255,0.05)", padding: "6px 8px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.05)" }}>
+                  <strong>Show AI Tracking:</strong> Press <kbd style={{ background: "rgba(100, 140, 255, 0.4)", padding: "2px 5px", borderRadius: 4, fontFamily: "monospace" }}>D</kbd> to show real-time joint and shoulder-seam tracking. Very impressive live!
+                </div>
+                <div style={{ background: "rgba(255,255,255,0.05)", padding: "6px 8px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.05)" }}>
+                  <strong>Full Screen Kiosk:</strong> Press <kbd style={{ background: "rgba(255,255,255,0.15)", padding: "2px 5px", borderRadius: 4, fontFamily: "monospace" }}>F</kbd> to enter full-screen smart mirror mode.
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <h4 style={{ margin: "0 0 4px 0", fontWeight: 600, color: "#e0e0e0" }}>
+                3. Keyboard Shortcuts
+              </h4>
+              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <tbody>
+                  <tr>
+                    <td style={{ padding: "3px 0" }}><kbd style={{ background: "rgba(255,255,255,0.15)", padding: "1px 5px", borderRadius: 4 }}>←</kbd> / <kbd style={{ background: "rgba(255,255,255,0.15)", padding: "1px 5px", borderRadius: 4 }}>→</kbd></td>
+                    <td style={{ color: "rgba(255,255,255,0.7)" }}>Previous / Next Outfit</td>
+                  </tr>
+                  <tr>
+                    <td style={{ padding: "3px 0" }}><kbd style={{ background: "rgba(255,255,255,0.15)", padding: "1px 5px", borderRadius: 4 }}>1-9</kbd></td>
+                    <td style={{ color: "rgba(255,255,255,0.7)" }}>Direct select outfit</td>
+                  </tr>
+                  <tr>
+                    <td style={{ padding: "3px 0" }}><kbd style={{ background: "rgba(255,255,255,0.15)", padding: "1px 5px", borderRadius: 4 }}>R</kbd></td>
+                    <td style={{ color: "rgba(255,255,255,0.7)" }}>Reset layout index</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div style={{ fontSize: "0.7rem", color: "rgba(255,255,255,0.4)", borderTop: "1px solid rgba(255,255,255,0.1)", paddingTop: 8 }}>
+              💡 Stand in a well-lit room for best webcam pose tracking.
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Visible camera feed for Laptop Mode (mirrored) */}
       <video
         ref={videoRef}
@@ -1258,6 +1382,10 @@ function LaptopPage() {
         @keyframes dislikeDismiss {
           0%   { transform: translateY(0); opacity: 1; filter: none; }
           100% { transform: translateY(80px); opacity: 0; filter: sepia(0.5) saturate(3) hue-rotate(-30deg); }
+        }
+        @keyframes slideIn {
+          from { opacity: 0; transform: translateX(20px); }
+          to { opacity: 1; transform: translateX(0); }
         }
       `}</style>
 
