@@ -7,6 +7,7 @@ import { useGestureRecognizer } from "@/hooks/useGestureRecognizer";
 import { usePoseDetection } from "@/hooks/usePoseDetection";
 import { useMiraVideoAvatar } from "@/hooks/useMiraVideoAvatar";
 import type { MiraEmotion } from "@/components/ui/mira-video-avatar";
+import { useDeepgramSTT, type DeepgramSTTConfig } from "@/hooks/useDeepgramSTT";
 import { detectEmotionFromText } from "@/lib/emotion-parser";
 import { MiraVideoAvatar } from "@/components/ui/mira-video-avatar";
 import { GestureIndicator } from "@/components/mirror/GestureIndicator";
@@ -14,6 +15,7 @@ import { ClothingCanvas, type FitMethod } from "@/components/mirror/ClothingCanv
 import { DebugOverlay } from "@/components/mirror/DebugOverlay";
 import { SpeechDisplay } from "@/components/mirror/SpeechDisplay";
 import { OutfitDots } from "@/components/mirror/OutfitDots";
+import VoiceIndicator from "@/components/mirror/VoiceIndicator";
 import PriceStrip, { type PriceStripItem } from "@/components/mirror/PriceStrip";
 import SessionRecap from "@/components/mirror/SessionRecap";
 import { socket } from "@/lib/socket";
@@ -134,11 +136,12 @@ function LaptopPage() {
     user_name?: string;
   } | null>(null);
 
-  // ── Chat text input ──
-  const [chatInput, setChatInput] = useState("");
+  // ── STT config (live-tunable from admin panel) ──
+  const [sttConfig, setSttConfig] = useState<DeepgramSTTConfig | undefined>();
 
   // ── Mira video avatar + voice ──
   const mira = useMiraVideoAvatar();
+  const stt = useDeepgramSTT(sttConfig);
 
   // ── Speech display state ──
   const [speechText, setSpeechText] = useState("");
@@ -200,7 +203,22 @@ function LaptopPage() {
     };
   }, []);
 
+  // ── Fetch initial STT config + listen for admin updates ──
+  useEffect(() => {
+    getSTTConfig()
+      .then(setSttConfig)
+      .catch(() => console.warn("[Mirror] Failed to fetch STT config, using defaults"));
 
+    const handleSttConfigUpdated = (data: DeepgramSTTConfig) => {
+      console.log("[Mirror] STT config updated:", data);
+      setSttConfig(data);
+    };
+
+    socket.on("stt_config_updated", handleSttConfigUpdated);
+    return () => {
+      socket.off("stt_config_updated", handleSttConfigUpdated);
+    };
+  }, []);
 
   // Join user-specific room when active user changes
   useEffect(() => {
@@ -259,7 +277,20 @@ function LaptopPage() {
     };
   }, []);
 
-
+  // ── Activate STT after Mira's opening speech finishes ──
+  useEffect(() => {
+    if (
+      sessionActive &&
+      !openingCompleteRef.current &&
+      !mira.isSpeaking &&
+      !sessionLoading  // loading screen already dismissed = speech has started & ended
+    ) {
+      openingCompleteRef.current = true;
+      console.log("[Mirror] Opening speech complete — activating STT");
+      stt.startListening();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mira.isSpeaking, sessionActive, sessionLoading]);
 
   // ── Mira speech events (sentence-level streaming) ──
   useEffect(() => {
@@ -472,6 +503,7 @@ function LaptopPage() {
       stats?: { items_shown: number; likes: number; dislikes: number };
       user_name?: string;
     }) => {
+      stt.stopListening();
       setSessionActive(false);
       setSessionLoading(false);
       setCanvasOutfits([]);
@@ -512,13 +544,40 @@ function LaptopPage() {
     };
   }, [userId]);
 
-  // ── Send chat input text to Mira (interrupts Mira if speaking) ──
-  const sendChatText = useCallback(() => {
-    if (!chatInput.trim() || !userId) return;
-    const text = chatInput.trim();
-    setChatInput("");
+  // Keep track of when Mira finishes speaking to ignore echo transcripts during processing/STT lag
+  const lastSpokeTimeRef = useRef<number>(0);
+  useEffect(() => {
+    lastSpokeTimeRef.current = Date.now();
+  }, [mira.isSpeaking]);
+
+  // ── Flush queued transcripts when mira stops speaking ──
+  useEffect(() => {
+    if (!mira.isSpeaking && pendingTranscriptRef.current && userId) {
+      socket.emit("mirror_event", {
+        user_id: userId,
+        event: { type: "voice", transcript: pendingTranscriptRef.current },
+      });
+      pendingTranscriptRef.current = null;
+    }
+  }, [mira.isSpeaking, userId]);
+
+  // ── Forward final STT transcripts (interrupt Mira if speaking) ──
+  useEffect(() => {
+    if (!stt.transcript || !userId) return;
+
+    // Echo prevention logic: Ignore speech transcription during and immediately after Mira speaks.
+    const now = Date.now();
+    const silenceGraceMs = 1500;
+    const timeSinceSpeech = now - lastSpokeTimeRef.current;
+
+    if (mira.isSpeaking || timeSinceSpeech < silenceGraceMs) {
+      console.log(`[Mirror:EchoPrevention] Ignored feedback transcript "${stt.transcript}" (timeSinceSpeech=${timeSinceSpeech}ms, isSpeaking=${mira.isSpeaking})`);
+      stt.resetTranscript();
+      return;
+    }
 
     if (mira.isSpeaking) {
+      // INTERRUPT: stop TTS/avatar and tell backend to abort the stream
       mira.stop();
       interruptedRef.current = true;
       sentenceBufferRef.current = "";
@@ -529,11 +588,15 @@ function LaptopPage() {
       socket.emit("interrupt", { user_id: userId });
     }
 
+    // Always send transcript immediately (whether interrupting or not)
     socket.emit("mirror_event", {
       user_id: userId,
-      event: { type: "voice", transcript: text },
+      event: { type: "voice", transcript: stt.transcript },
     });
-  }, [chatInput, userId, mira]);
+    pendingTranscriptRef.current = null;
+    stt.resetTranscript();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stt.transcript, userId, mira.isSpeaking]);
 
   // ── Snapshot handler ──
   useEffect(() => {
@@ -1093,72 +1156,12 @@ function LaptopPage() {
       {/* Liked items tray (z-12, bottom-right) */}
       {sessionActive && <LikedItemsTray items={likedOutfits} />}
 
-      {/* Text Chat Input Overlay (z-30, bottom-center) */}
+      {/* Voice indicator for user STT (z-15, bottom-left) */}
       {sessionActive && (
-        <div
-          style={{
-            position: "absolute",
-            bottom: activeCanvasOutfit.length > 0 ? 140 : (carouselItems.length > 0 ? 240 : 40),
-            left: "50%",
-            transform: "translateX(-50%)",
-            width: "90%",
-            maxWidth: "500px",
-            zIndex: 30,
-            transition: "bottom 350ms cubic-bezier(0.16, 1, 0.3, 1)",
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              gap: 8,
-              background: "rgba(255, 255, 255, 0.05)",
-              backdropFilter: "blur(16px)",
-              WebkitBackdropFilter: "blur(16px)",
-              border: "1px solid rgba(255, 255, 255, 0.1)",
-              borderRadius: "14px",
-              padding: "8px 12px",
-              boxShadow: "0 8px 32px rgba(0, 0, 0, 0.4)",
-            }}
-          >
-            <input
-              type="text"
-              value={chatInput}
-              onChange={(e) => setChatInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  sendChatText();
-                }
-              }}
-              placeholder="Ask Mira something (e.g. streetwear, date night)..."
-              style={{
-                flex: 1,
-                background: "transparent",
-                border: "none",
-                color: "#fff",
-                outline: "none",
-                fontSize: "0.95rem",
-              }}
-            />
-            <button
-              onClick={sendChatText}
-              disabled={!chatInput.trim()}
-              style={{
-                background: chatInput.trim() ? "linear-gradient(135deg, #4f46e5 0%, #3730a3 100%)" : "rgba(255,255,255,0.05)",
-                border: "none",
-                borderRadius: "8px",
-                padding: "8px 16px",
-                color: "#fff",
-                fontWeight: 600,
-                fontSize: "0.85rem",
-                cursor: chatInput.trim() ? "pointer" : "default",
-                transition: "all 0.2s ease",
-              }}
-            >
-              Send
-            </button>
-          </div>
-        </div>
+        <VoiceIndicator
+          isListening={stt.isListening}
+          interimTranscript={stt.interimTranscript}
+        />
       )}
 
       {/* Gesture visual feedback (z-20, center) */}

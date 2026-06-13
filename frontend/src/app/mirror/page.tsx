@@ -950,14 +950,10 @@ function MirrorPage() {
         position: "relative",
         width: "100vw",
         height: "100vh",
-        background: `linear-gradient(rgba(5, 5, 5, 0.9), rgba(5, 5, 5, 0.9)), url('/background.jpg') no-repeat center center/cover`,
-        fontFamily: "'Outfit', 'Inter', system-ui, sans-serif",
+        background: "#000",
         overflow: "hidden",
       }}
     >
-      {/* Import premium font */}
-      <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet" />
-
       {/* Hidden camera feed (1x1 pixel, invisible — only used for pose detection) */}
       <video
         ref={videoRef}
@@ -986,7 +982,7 @@ function MirrorPage() {
             flexDirection: "column",
             alignItems: "center",
             justifyContent: "center",
-            background: "transparent",
+            background: "#000",
           }}
         >
           <h1
@@ -1010,8 +1006,6 @@ function MirrorPage() {
               borderRadius: 16,
               padding: 20,
               marginBottom: 24,
-              border: "1px solid rgba(255, 255, 255, 0.2)",
-              boxShadow: "0 8px 32px rgba(0, 0, 0, 0.5)",
             }}
           >
             <QRCodeSVG
@@ -1039,7 +1033,7 @@ function MirrorPage() {
             flexDirection: "column",
             alignItems: "center",
             justifyContent: "center",
-            background: "transparent",
+            background: "#000",
           }}
         >
           <p style={{ color: "rgba(255,255,255,0.5)", fontSize: "1rem", marginBottom: 8 }}>
@@ -1057,11 +1051,11 @@ function MirrorPage() {
                 fontSize: "1.2rem",
                 fontWeight: 600,
                 color: "#fff",
-                background: "linear-gradient(135deg, #4f46e5 0%, #3730a3 100%)",
+                background: "rgba(100, 140, 255, 0.8)",
                 border: "none",
                 borderRadius: 12,
                 cursor: "pointer",
-                boxShadow: "0 8px 25px rgba(79, 70, 229, 0.4)",
+                boxShadow: "0 4px 20px rgba(100, 140, 255, 0.4)",
               }}
             >
               {isStarting ? "Starting..." : "Start Session"}
@@ -1073,11 +1067,10 @@ function MirrorPage() {
                 fontSize: "1.2rem",
                 fontWeight: 600,
                 color: "#fff",
-                background: "rgba(255, 255, 255, 0.05)",
-                border: "1px solid rgba(255, 255, 255, 0.15)",
+                background: "rgba(255, 255, 255, 0.15)",
+                border: "1px solid rgba(255,255,255,0.3)",
                 borderRadius: 12,
                 cursor: "pointer",
-                transition: "all 0.2s ease",
               }}
             >
               Skip
@@ -1098,7 +1091,7 @@ function MirrorPage() {
             flexDirection: "column",
             alignItems: "center",
             justifyContent: "center",
-            background: "transparent",
+            background: "#000",
           }}
         >
           <div style={{ marginBottom: 32 }}>

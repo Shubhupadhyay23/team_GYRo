@@ -67,7 +67,7 @@ export default function QueueStatus({ userId, onBecameActive, onLeave }: QueueSt
 
   if (error) {
     return (
-      <div className="text-center text-red-400 font-medium">
+      <div className="text-center text-red-500">
         <p>{error}</p>
       </div>
     );
@@ -75,7 +75,7 @@ export default function QueueStatus({ userId, onBecameActive, onLeave }: QueueSt
 
   if (!queue) {
     return (
-      <div className="text-center text-zinc-400 animate-pulse">
+      <div className="text-center text-zinc-500">
         <p>Joining the queue...</p>
       </div>
     );
@@ -84,15 +84,15 @@ export default function QueueStatus({ userId, onBecameActive, onLeave }: QueueSt
   if (queue.status === "active") {
     return (
       <div className="flex flex-col items-center gap-3">
-        <div className="w-14 h-14 rounded-full bg-gradient-to-tr from-emerald-500 to-green-600 flex items-center justify-center text-white text-2xl shadow-[0_0_15px_rgba(16,185,129,0.4)] animate-bounce">
+        <div className="w-14 h-14 rounded-full bg-green-500 flex items-center justify-center text-white text-2xl">
           ✓
         </div>
-        <h2 className="text-xl font-bold text-white">It&apos;s your turn!</h2>
-        <p className="text-zinc-300 text-sm text-center">Head to the mirror to begin your session.</p>
+        <h2 className="text-xl font-bold">It&apos;s your turn!</h2>
+        <p className="text-zinc-500 text-sm">Head to the mirror to begin your session.</p>
         <button
           onClick={handleLeave}
           disabled={leaving}
-          className="mt-2 text-xs text-zinc-400 hover:text-zinc-200 transition-colors disabled:opacity-50 underline"
+          className="mt-2 text-xs text-zinc-400 hover:text-zinc-600 transition-colors disabled:opacity-50"
         >
           {leaving ? "Leaving..." : "Leave Queue"}
         </button>
@@ -101,28 +101,23 @@ export default function QueueStatus({ userId, onBecameActive, onLeave }: QueueSt
   }
 
   return (
-    <div className="flex flex-col items-center gap-4">
-      <h2 className="text-lg font-bold text-white">You&apos;re in the queue</h2>
-      <div 
-        className="w-18 h-18 rounded-full bg-indigo-950/40 border border-indigo-500/20 flex items-center justify-center text-3xl font-bold text-indigo-300 shadow-[inset_0_1px_3px_rgba(0,0,0,0.4)]" 
-        style={{ width: 72, height: 72 }}
-      >
+    <div className="flex flex-col items-center gap-3">
+      <h2 className="text-lg font-bold">You&apos;re in the queue</h2>
+      <div className="w-18 h-18 rounded-full bg-zinc-100 flex items-center justify-center text-3xl font-bold" style={{ width: 72, height: 72 }}>
         {queue.position}
       </div>
-      <div className="text-center">
-        <p className="text-zinc-300 text-sm font-medium">
-          {queue.total_ahead === 0
-            ? "You're next! Hang tight."
-            : `${queue.total_ahead} ${queue.total_ahead === 1 ? "person" : "people"} ahead of you`}
-        </p>
-        <p className="text-zinc-500 text-xs mt-1">
-          This page updates automatically.
-        </p>
-      </div>
+      <p className="text-zinc-500 text-center text-sm">
+        {queue.total_ahead === 0
+          ? "You're next! Hang tight."
+          : `${queue.total_ahead} ${queue.total_ahead === 1 ? "person" : "people"} ahead of you`}
+      </p>
+      <p className="text-zinc-400 text-xs">
+        This page updates automatically.
+      </p>
       <button
         onClick={handleLeave}
         disabled={leaving}
-        className="mt-1 text-xs text-zinc-400 hover:text-zinc-200 transition-colors disabled:opacity-50 underline"
+        className="mt-1 text-xs text-zinc-400 hover:text-zinc-600 transition-colors disabled:opacity-50"
       >
         {leaving ? "Leaving..." : "Leave Queue"}
       </button>
