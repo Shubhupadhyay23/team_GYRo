@@ -206,7 +206,7 @@ async def test_generate_recommendations_integration(db, test_user_with_purchases
     assert "outfits" in result["data"]
     assert len(result["data"]["outfits"]) >= 3
     assert result["generation_time_ms"] > 0
-    assert result["generation_time_ms"] < 60000  # Should be under 1 minute
+    assert result["generation_time_ms"] < 180000  # Should be under 3 minutes (allowing for API rate-limit retries)
 
     # Verify outfit structure
     first_outfit = result["data"]["outfits"][0]

@@ -21,8 +21,9 @@ MAX_CONCURRENT = 5
 
 GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta/models"
 GEMINI_MODELS = [
-    "gemini-2.0-flash-exp-image-generation",
     "gemini-2.5-flash-image",
+    "gemini-3.1-flash-image",
+    "gemini-2.0-flash-exp-image-generation",
 ]
 
 FLAT_LAY_PROMPT = (
@@ -120,38 +121,47 @@ async def generate_flat_lay(
                 },
             }
 
-            # Try each model in order, falling back on 403/429 errors
+            # Try each model in order, falling back on errors
             for model in GEMINI_MODELS:
                 url = f"{GEMINI_API_BASE}/{model}:generateContent?key={api_key}"
-                try:
-                    response = await http_client.post(url, json=payload, timeout=60)
-                    if response.status_code in (403, 429):
-                        print(f"[Gemini] {model} returned {response.status_code}, trying next model...")
-                        continue
-                    response.raise_for_status()
-                    data = response.json()
+                retries = 3
+                backoff = 2.0
+                for attempt in range(retries):
+                    try:
+                        response = await http_client.post(url, json=payload, timeout=60)
+                        if response.status_code == 429:
+                            print(f"[Gemini] {model} rate limited (429). Retrying in {backoff}s... (attempt {attempt+1}/{retries})")
+                            await asyncio.sleep(backoff)
+                            backoff *= 2.0
+                            continue
+                        elif response.status_code != 200:
+                            print(f"[Gemini] {model} returned status {response.status_code}, trying next model...")
+                            break
+                        data = response.json()
 
-                    # Extract generated image from response
-                    candidates = data.get("candidates", [])
-                    if candidates:
-                        parts = candidates[0].get("content", {}).get("parts", [])
-                        for part in parts:
-                            inline_data = part.get("inlineData")
-                            if inline_data and inline_data.get("data"):
-                                mime = inline_data.get("mimeType", "image/png")
-                                b64 = inline_data["data"]
-                                data_url = f"data:{mime};base64,{b64}"
-                                try:
-                                    data_url = await remove_background(data_url)
-                                except Exception as e:
-                                    print(f"[rembg] Background removal failed, using original: {e}")
-                                return data_url
-                    return None
-                except httpx.HTTPStatusError as e:
-                    if e.response.status_code in (403, 429):
-                        print(f"[Gemini] {model} returned {e.response.status_code}, trying next model...")
-                        continue
-                    raise
+                        # Extract generated image from response
+                        candidates = data.get("candidates", [])
+                        if candidates:
+                            parts = candidates[0].get("content", {}).get("parts", [])
+                            for part in parts:
+                                inline_data = part.get("inlineData")
+                                if inline_data and inline_data.get("data"):
+                                    mime = inline_data.get("mimeType", "image/png")
+                                    b64 = inline_data["data"]
+                                    data_url = f"data:{mime};base64,{b64}"
+                                    try:
+                                        data_url = await remove_background(data_url)
+                                    except Exception as e:
+                                        print(f"[rembg] Background removal failed, using original: {e}")
+                                    return data_url
+                        break
+                    except Exception as e:
+                        if attempt == retries - 1:
+                            print(f"[Gemini] {model} request failed on final attempt: {e}, trying next model...")
+                        else:
+                            print(f"[Gemini] {model} request failed: {e}. Retrying in {backoff}s...")
+                            await asyncio.sleep(backoff)
+                            backoff *= 2.0
 
             print(f"[Gemini] All models failed for '{title[:40]}'")
             return None

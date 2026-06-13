@@ -35,8 +35,8 @@ def search_clothing(query: str, api_key: str, num_results: int = 10) -> List[Dic
     results = []
     for item in data.get("shopping", []):
         image_url = item.get("imageUrl") or item.get("thumbnailUrl", "")
-        if not image_url:
-            continue  # Skip items without images
+        if not image_url or image_url.startswith("data:"):
+            continue  # Skip items without normal image URLs
         results.append({
             "title": item.get("title", ""),
             "source": item.get("source", ""),
@@ -147,8 +147,8 @@ async def _async_search_clothing(
     results = []
     for item in data.get("shopping", []):
         image_url = item.get("imageUrl") or item.get("thumbnailUrl", "")
-        if not image_url:
-            continue  # Skip items without images
+        if not image_url or image_url.startswith("data:"):
+            continue  # Skip items without normal image URLs
         results.append({
             "title": item.get("title", ""),
             "source": item.get("source", ""),

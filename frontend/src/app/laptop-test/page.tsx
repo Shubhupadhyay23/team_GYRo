@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState, useRef } from "react";
 import { socket } from "@/lib/socket";
+import { parseEmotionTag } from "@/lib/emotion-parser";
 
 type TestPageState = "start" | "session" | "recap";
 
@@ -69,9 +70,7 @@ export default function LaptopTestPage() {
   useEffect(() => {
     const handleSessionActive = () => {
       setKioskState("session");
-      setMessages([
-        { sender: "mira", text: "Hi! I'm Mira. How can I help you style today?" }
-      ]);
+      setMessages([]);
       setRecapSummary("");
     };
 
@@ -89,6 +88,7 @@ export default function LaptopTestPage() {
       if (data.is_chunk !== false) {
         if (!data.text) return;
         sentenceBufferRef.current += data.text;
+        const currentText = parseEmotionTag(sentenceBufferRef.current).cleanText;
 
         // Update the last message if it's from Mira and currently streaming
         setMessages((prev) => {
@@ -96,12 +96,12 @@ export default function LaptopTestPage() {
           if (last && last.sender === "mira" && last.isStreaming) {
             return [
               ...prev.slice(0, -1),
-              { sender: "mira", text: sentenceBufferRef.current, isStreaming: true }
+              { sender: "mira", text: currentText, isStreaming: true }
             ];
           } else {
             return [
               ...prev,
-              { sender: "mira", text: sentenceBufferRef.current, isStreaming: true }
+              { sender: "mira", text: currentText, isStreaming: true }
             ];
           }
         });
@@ -110,21 +110,23 @@ export default function LaptopTestPage() {
         if (data.text) {
           sentenceBufferRef.current += data.text;
         }
+        const finalText = parseEmotionTag(sentenceBufferRef.current).cleanText;
+        sentenceBufferRef.current = "";
+
         setMessages((prev) => {
           const last = prev[prev.length - 1];
           if (last && last.sender === "mira" && last.isStreaming) {
             return [
               ...prev.slice(0, -1),
-              { sender: "mira", text: sentenceBufferRef.current, isStreaming: false }
+              { sender: "mira", text: finalText, isStreaming: false }
             ];
           } else {
             return [
               ...prev,
-              { sender: "mira", text: sentenceBufferRef.current, isStreaming: false }
+              { sender: "mira", text: finalText, isStreaming: false }
             ];
           }
         });
-        sentenceBufferRef.current = "";
       }
     };
 
@@ -133,6 +135,7 @@ export default function LaptopTestPage() {
       socket.off("mira_speech", handleSpeech);
     };
   }, []);
+
 
   // ── Session Ended event from Backend ──
   useEffect(() => {
@@ -162,6 +165,8 @@ export default function LaptopTestPage() {
           resolvedApiUrl = socketUrl;
         } else if (apiHost.includes("localhost")) {
           resolvedApiUrl = apiHost.replace("localhost", window.location.hostname);
+        } else if (apiHost.includes("127.0.0.1")) {
+          resolvedApiUrl = apiHost.replace("127.0.0.1", window.location.hostname);
         }
       }
       resolvedApiUrl = resolvedApiUrl.replace(/\/$/, "");

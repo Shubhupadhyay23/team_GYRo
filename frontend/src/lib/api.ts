@@ -9,6 +9,8 @@ export function getResolvedApiUrl(): string {
       resolvedApiUrl = socketUrl.replace(/^wss:/, "https:");
     } else if (apiHost.includes("localhost")) {
       resolvedApiUrl = apiHost.replace("localhost", window.location.hostname);
+    } else if (apiHost.includes("127.0.0.1")) {
+      resolvedApiUrl = apiHost.replace("127.0.0.1", window.location.hostname);
     }
   }
   return resolvedApiUrl.replace(/\/$/, "");

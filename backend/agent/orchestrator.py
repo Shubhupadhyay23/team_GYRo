@@ -38,8 +38,8 @@ from services.user_data_service import (
 
 load_dotenv()
 
-SONNET_MODEL = "gemini-3.1-flash-lite"
-HAIKU_MODEL = "gemini-3.1-flash-lite"
+SONNET_MODEL = "gemini-2.5-flash"
+HAIKU_MODEL = "gemini-2.5-flash"
 SILENCE_TIMEOUT_SECONDS = 15
 EVENT_BATCH_WINDOW_MS = 200
 SOFT_API_LIMIT = 20
@@ -84,7 +84,7 @@ class MiraOrchestrator:
         self.sio = socket_io
         self.sessions: dict[str, SessionState] = {}
         self._silence_tasks: dict[str, asyncio.Task] = {}
-        self.preferred_model = "gemini-3.1-flash-lite"
+        self.preferred_model = "gemini-2.5-flash"
 
     async def interrupt(self, user_id: str) -> None:
         """Request interruption of the current Claude stream for a user.
@@ -105,7 +105,7 @@ class MiraOrchestrator:
 
         session = SessionState(user_id=user_id)
         self.sessions[user_id] = session
-        self.preferred_model = "gemini-3.1-flash-lite"
+        self.preferred_model = "gemini-2.5-flash"
 
         # Load user data from DB in parallel — fall back to empty defaults if any fail
         profile = {}
@@ -571,7 +571,7 @@ class MiraOrchestrator:
         interrupted = False
         stream = None
 
-        models_to_try = [model_default, "gemini-3.1-flash-lite", "gemini-2.5-flash", "gemini-1.5-flash"]
+        models_to_try = [model_default, "gemini-2.5-flash", "gemini-1.5-flash"]
         seen = set()
         models_to_try = [x for x in models_to_try if not (x in seen or seen.add(x))]
         base_delay = 1.0
@@ -866,7 +866,7 @@ class MiraOrchestrator:
         print("[mira] Sending photo to Gemini Vision model...")
         try:
             vision_response = await self.client.chat.completions.create(
-                model="gemini-3.1-flash-lite",
+                model="gemini-2.5-flash",
                 messages=[
                     {
                         "role": "user",
@@ -1273,7 +1273,7 @@ async def generate_outfit_recommendations(
         # Run Gemini + flat lays in parallel
         gemini_response, flat_lay_map = await asyncio.gather(
             openai_client.chat.completions.create(
-                model="gemini-3.1-flash-lite",
+                model="gemini-2.5-flash",
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt}
@@ -1293,7 +1293,6 @@ async def generate_outfit_recommendations(
 
         # Step 5: Map flat lays to selected outfit items + save to DB
         outfits = recommendations.get("outfits", [])
-
         # Attach flat lay images as both flat_image_url and cleaned_image_url
         for outfit in outfits:
             for outfit_item in outfit.get("items", []):
@@ -1302,6 +1301,9 @@ async def generate_outfit_recommendations(
                 if pid in flat_lay_map:
                     item["flat_image_url"] = flat_lay_map[pid]
                     item["cleaned_image_url"] = flat_lay_map[pid]
+                else:
+                    item["flat_image_url"] = item.get("image_url", "")
+                    item["cleaned_image_url"] = item.get("image_url", "")
 
         outfit_ids = await save_outfits_to_database(db, session_id, outfits)
 

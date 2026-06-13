@@ -117,6 +117,13 @@ export function ClothingCanvas({
 
         img.onload = async () => {
           if (mounted) {
+            // Check for 1x1 transparent/fallback placeholder image
+            if (img.width <= 1 && img.height <= 1) {
+              console.warn(`[MirrorV2:Canvas] Skipping rendering of placeholder/broken image for "${item.name}" (${item.category})`);
+              resolve();
+              return;
+            }
+
             // Detect and store content bounds (crop transparent padding)
             const bounds = detectImageBounds(img);
             boundsRef.current.set(item.id, bounds);
@@ -159,7 +166,7 @@ export function ClothingCanvas({
         };
 
         img.onerror = () => {
-          console.error(`Failed to load image: ${item.imageUrl}`);
+          console.warn(`Failed to load image: ${item.imageUrl}`);
           onImageError?.(item.id, `Failed to load: ${item.imageUrl}`);
           resolve();
         };

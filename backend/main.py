@@ -81,8 +81,19 @@ async def proxy_image(url: str):
             content_type = response.headers.get("content-type", "image/jpeg")
             return StreamingResponse(io.BytesIO(response.content), media_type=content_type)
     except Exception as e:
-        print(f"[ImageProxy] Failed to proxy image '{url}': {e}")
-        raise HTTPException(status_code=502, detail=f"Failed to fetch image: {str(e)}")
+        print(f"[ImageProxy] Failed to proxy image '{url}': {e}. Returning 1x1 transparent PNG fallback.")
+        import base64
+        from fastapi import Response
+        transparent_png = base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=")
+        err_msg = str(e).replace("\n", " ").replace("\r", " ")
+        return Response(
+            content=transparent_png,
+            media_type="image/png",
+            headers={
+                "X-Proxy-Failure": "True",
+                "X-Proxy-Error": err_msg
+            }
+        )
 
 
 
@@ -255,7 +266,7 @@ Reply ONLY with valid JSON (no markdown):
 
     try:
         response = await client.chat.completions.create(
-            model="gemini-3.1-flash-lite",
+            model="gemini-2.5-flash",
             max_tokens=1024,
             messages=[{"role": "user", "content": claude_prompt}],
             response_format={"type": "json_object"}
